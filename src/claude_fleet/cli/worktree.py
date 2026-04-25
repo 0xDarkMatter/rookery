@@ -147,18 +147,114 @@ def worktree_sweep_cmd(
         "--dry-run",
         help="Print orphaned worktrees without removing them.",
     ),
+    worktree_base: Path = typer.Option(
+        None,
+        "--worktree-base",
+        help=(
+            "Root directory holding per-job worktree subdirectories. "
+            "Defaults to the value from OrchestratorConfig (./worktrees)."
+        ),
+    ),
+    repo_root: Path | None = typer.Option(
+        None,
+        "--repo-root",
+        help=(
+            "Root of the git repository that owns the worktrees. "
+            "Defaults to the current working directory."
+        ),
+    ),
+    orphan_age_hours: float | None = typer.Option(
+        None,
+        "--orphan-age-hours",
+        help=(
+            "Minimum age in hours before a terminal-status worktree is swept. "
+            "Defaults to the value from OrchestratorConfig (168 h = 7 days)."
+        ),
+    ),
 ) -> None:
     """Sweep orphaned worktrees (on disk with no corresponding jobs row).
 
-    TODO(P7 G8): implement full sweep logic.
+    An orphan is a worktree directory where:
+    - No jobs row exists for that directory name, OR
+    - The jobs row is in a terminal state (failed/blocked/landed) AND the
+      worktree is older than --orphan-age-hours.
+
+    With --dry-run, lists candidates without removing anything.
     """
-    # TODO(P7 G8): implement — find worktree dirs with no jobs row, remove them
-    typer.echo(
-        "TODO: worktree sweep is not yet implemented. "
-        "Implement in P7 (G8).",
-        err=True,
+    import asyncio  # noqa: PLC0415
+
+    db_path = (
+        Path(ctx.obj["db"]) if ctx.obj and "db" in ctx.obj else Path("./claude-fleet.db")
     )
-    raise typer.Exit(code=1)
+
+    from claude_fleet.orchestrator.config import OrchestratorConfig  # noqa: PLC0415
+
+    cfg = OrchestratorConfig(db_path=db_path)
+
+    resolved_worktree_base: Path = worktree_base if worktree_base is not None else cfg.worktree_base
+    resolved_age_hours: float = orphan_age_hours if orphan_age_hours is not None else cfg.orphan_age_hours
+
+    from claude_fleet.worktree import GitWorktreeLifecycle, find_orphans  # noqa: PLC0415
+
+    async def _run() -> int:
+        """Return count of orphans found (and removed if not dry_run)."""
+        orphans = await find_orphans(
+            worktree_base=resolved_worktree_base,
+            db_path=db_path,
+            orphan_age_hours=resolved_age_hours,
+        )
+
+        if not orphans:
+            console.print("[dim]no orphaned worktrees found[/dim]")
+            return 0
+
+        from rich.table import Table  # noqa: PLC0415
+
+        table = Table(title="orphaned worktrees", show_lines=False)
+        table.add_column("path", style="bold")
+        table.add_column("reason")
+        table.add_column("last modified")
+        for orphan in orphans:
+            table.add_row(
+                str(orphan.path),
+                orphan.reason,
+                orphan.last_modified.strftime("%Y-%m-%d %H:%M UTC"),
+            )
+        console.print(table)
+
+        if dry_run:
+            console.print(
+                f"[yellow]found {len(orphans)} orphan(s) (dry-run — not removed)[/yellow]"
+            )
+            return len(orphans)
+
+        # Remove each orphan using force_remove.
+        lifecycle = GitWorktreeLifecycle(
+            base_dir=resolved_worktree_base,
+            branch_prefix="parcel/",
+            base_branch="main",
+            repo_root=repo_root,
+        )
+        removed = 0
+        for orphan in orphans:
+            try:
+                await lifecycle.force_remove(orphan.path)
+                console.print(f"[green]removed[/green] {orphan.path}")
+                removed += 1
+            except Exception as exc:
+                console.print(
+                    f"[red]failed[/red] to remove {orphan.path}: {exc}",
+                    highlight=False,
+                )
+
+        console.print(f"removed {removed} of {len(orphans)} worktree(s)")
+        return removed
+
+    try:
+        asyncio.run(_run())
+    except Exception as exc:
+        typer.echo(f"error: sweep failed: {exc}", err=True)
+        raise typer.Exit(code=1) from None
 
 
 __all__ = ["worktree_app"]

@@ -28,11 +28,106 @@ Design notes
 from __future__ import annotations
 
 import asyncio
+import sqlite3
 import subprocess
 from abc import ABC, abstractmethod
+from dataclasses import dataclass
+from datetime import datetime, timezone
 from pathlib import Path
 
 from claude_fleet.orchestrator.backend import Job
+
+
+@dataclass
+class OrphanInfo:
+    """Information about a worktree directory that has no live job."""
+
+    path: Path
+    reason: str
+    last_modified: datetime
+
+
+# Terminal job statuses: a worktree in one of these is a candidate for sweep
+# once it has aged past ``orphan_age_hours``.
+_TERMINAL_STATUSES: frozenset[str] = frozenset({"failed", "blocked", "landed"})
+
+
+async def find_orphans(
+    worktree_base: Path,
+    db_path: Path,
+    orphan_age_hours: float = 168.0,
+) -> list[OrphanInfo]:
+    """Return worktree directories under *worktree_base* that are orphaned.
+
+    A directory is considered an orphan when:
+
+    * No row exists in the ``jobs`` table whose ``id`` matches the directory
+      name, **or**
+    * The matching ``jobs`` row has status in ``{failed, blocked, landed}``
+      (terminal) **and** the directory's ``mtime`` is older than
+      *orphan_age_hours*.
+
+    Parameters
+    ----------
+    worktree_base:
+        Root directory that holds per-job worktree sub-directories.
+    db_path:
+        Path to the SQLite database containing the ``jobs`` table.
+    orphan_age_hours:
+        Age threshold (in hours) applied to terminal-status worktrees.
+        Defaults to 168 h (7 days).
+
+    Returns
+    -------
+    list[OrphanInfo]
+        Sorted by *path* for deterministic output.
+    """
+    if not worktree_base.is_dir():
+        return []
+
+    now_utc = datetime.now(tz=timezone.utc)
+
+    # Open a read-only connection — sweep should never mutate the DB.
+    conn = sqlite3.connect(str(db_path), timeout=10.0)
+    conn.row_factory = sqlite3.Row
+    try:
+        orphans: list[OrphanInfo] = []
+        for entry in sorted(worktree_base.iterdir()):
+            if not entry.is_dir():
+                continue
+            job_id = entry.name
+
+            # mtime of the worktree directory itself.
+            mtime_ts = entry.stat().st_mtime
+            last_modified = datetime.fromtimestamp(mtime_ts, tz=timezone.utc)
+            age_hours = (now_utc - last_modified).total_seconds() / 3600.0
+
+            row = conn.execute(
+                "SELECT status FROM jobs WHERE id = ?", (job_id,)
+            ).fetchone()
+
+            if row is None:
+                # No matching job at all — always orphaned.
+                orphans.append(
+                    OrphanInfo(
+                        path=entry.resolve(),
+                        reason="no jobs row",
+                        last_modified=last_modified,
+                    )
+                )
+            elif row["status"] in _TERMINAL_STATUSES and age_hours >= orphan_age_hours:
+                orphans.append(
+                    OrphanInfo(
+                        path=entry.resolve(),
+                        reason=f"terminal status={row['status']!r}, age={age_hours:.1f}h",
+                        last_modified=last_modified,
+                    )
+                )
+            # Otherwise: active/non-terminal, or terminal but too recent → keep.
+    finally:
+        conn.close()
+
+    return orphans
 
 
 class WorktreeRetireError(RuntimeError):
@@ -269,5 +364,43 @@ class GitWorktreeLifecycle(WorktreeLifecycle):
         worktree = self.base_dir / job.id
         return worktree.resolve() if worktree.exists() else None
 
+    async def force_remove(self, worktree: Path) -> None:
+        """Forcibly remove *worktree* regardless of job status or dirty state.
 
-__all__ = ["GitWorktreeLifecycle", "WorktreeLifecycle", "WorktreeRetireError"]
+        Unlike :meth:`retire` (which requires ``status == "landed"`` and a
+        clean working tree), ``force_remove`` is intended for orphan-cleanup
+        paths where no live job exists for the worktree.  It runs:
+
+        1. ``git worktree remove --force <worktree>``
+        2. ``git branch -D <branch>`` for the branch derived from the
+           worktree directory name (best-effort; logged on failure).
+
+        Parameters
+        ----------
+        worktree:
+            Absolute or relative path to the worktree directory.
+
+        Raises
+        ------
+        RuntimeError
+            When ``git worktree remove --force`` fails.
+        """
+        cwd = self.repo_root or self.base_dir
+        await _run_git("worktree", "remove", "--force", str(worktree), cwd=cwd)
+
+        # Best-effort branch deletion: derive branch name from worktree dir name.
+        branch = f"{self.branch_prefix}{worktree.name}"
+        try:
+            await _run_git("branch", "-D", branch, cwd=cwd)
+        except RuntimeError:
+            # Branch may already be gone or may never have existed — not fatal.
+            pass
+
+
+__all__ = [
+    "GitWorktreeLifecycle",
+    "OrphanInfo",
+    "WorktreeLifecycle",
+    "WorktreeRetireError",
+    "find_orphans",
+]
