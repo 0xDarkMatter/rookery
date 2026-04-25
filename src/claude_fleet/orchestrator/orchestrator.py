@@ -181,6 +181,14 @@ class JobNotFound(LookupError):  # noqa: N818 — lookup-like names conventional
     """Raised when a queue operation targets an unknown job id."""
 
 
+class LandRetryError(ValueError):
+    """Raised when ``retry_land`` preconditions are not met.
+
+    Distinct from ``ValueError`` so CLI callers can produce the right exit code
+    without inspecting the message text.
+    """
+
+
 class Orchestrator:
     """Persistent queue with atomic claim, lease reclaim, and retry escalation.
 
@@ -939,6 +947,74 @@ class Orchestrator:
         )
         return self.status(job_id)
 
+    def retry_land(self, job_id: str, worktree_base: Path | None = None) -> Job:
+        """Retry landing for a ``merge-blocked`` job.
+
+        Preconditions
+        -------------
+        1. Job must exist (else :exc:`JobNotFound`).
+        2. ``job.status == "merge-blocked"`` (else :exc:`LandRetryError` — exit 1).
+        3. Worktree must exist on disk at ``worktree_base / job_id`` when
+           *worktree_base* is provided (else :exc:`LandRetryError` with
+           "worktree missing — re-enqueue" guidance — exit 7 at CLI layer).
+
+        On success
+        ----------
+        - ``merge_block_reason`` cleared to ``NULL``
+        - ``land_attempts`` incremented
+        - ``status`` set to ``"landing"``
+        - Job event ``land:retry`` logged
+
+        The daemon's ``_start_land_attempts`` loop will then pick up the
+        now-``landing`` job on the next tick and spawn the land chain.
+        """
+
+        with self._conn_lock:
+            row = self._conn.execute(
+                "SELECT status, land_attempts FROM jobs WHERE id = ?",
+                (job_id,),
+            ).fetchone()
+            if row is None:
+                raise JobNotFound(job_id)
+
+            if row["status"] != "merge-blocked":
+                raise LandRetryError(
+                    f"land retry requires status='merge-blocked', got "
+                    f"{row['status']!r} for job {job_id!r}"
+                )
+
+            # Worktree check (optional gate — only when caller supplies base).
+            if worktree_base is not None:
+                worktree = Path(worktree_base) / job_id
+                if not worktree.exists():
+                    raise LandRetryError(
+                        f"worktree missing for job {job_id!r} at {worktree} — "
+                        "re-enqueue the job to recreate the worktree"
+                    )
+
+            next_attempts = row["land_attempts"] + 1
+            self._conn.execute(
+                "UPDATE jobs SET status='landing', merge_block_reason=NULL, "
+                "last_error=NULL, land_attempts=?, completed_at=NULL "
+                "WHERE id=?",
+                (next_attempts, job_id),
+            )
+            self._log_event(
+                job_id,
+                "land:retry",
+                actor="cli",
+                payload={"attempt": next_attempts},
+            )
+
+        self._emit(
+            {
+                "kind": "queue.land.retry",
+                "job_id": job_id,
+                "attempt": next_attempts,
+            }
+        )
+        return self.status(job_id)
+
     def record_land_event(
         self,
         job_id: str,
@@ -1132,5 +1208,6 @@ __all__ = [
     "MAX_AUDIT_ITER",
     "JobNotFound",
     "JournalEmit",
+    "LandRetryError",
     "Orchestrator",
 ]

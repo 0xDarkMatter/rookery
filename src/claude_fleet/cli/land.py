@@ -14,7 +14,7 @@ import typer
 from rich.console import Console
 from rich.table import Table
 
-from claude_fleet.orchestrator.orchestrator import JobNotFound, Orchestrator
+from claude_fleet.orchestrator.orchestrator import JobNotFound, LandRetryError, Orchestrator
 
 console = Console()
 
@@ -125,18 +125,37 @@ def land_history_cmd(
 def land_retry_cmd(
     ctx: typer.Context,
     job_id: str = typer.Argument(..., help="Job id to retry landing for."),
+    worktree_base: Path | None = typer.Option(
+        None,
+        "--worktree-base",
+        help="Root directory of per-job worktrees. When supplied, the worktree "
+        "must exist on disk or the command exits with code 7.",
+    ),
 ) -> None:
     """Retry landing for a merge-blocked job.
 
-    TODO(P7 G9): implement land retry.
+    Resets merge_block_reason, increments land_attempts, and re-enters the
+    land flow. The daemon will pick up the job on the next tick.
     """
-    # TODO(P7 G9): implement — reset merge_block_reason and re-trigger landing
-    typer.echo(
-        f"TODO: land retry is not yet implemented (job_id: {job_id}). "
-        "Implement in P7 (G9).",
-        err=True,
-    )
-    raise typer.Exit(code=1)
+    db_path = _db_from_ctx(ctx)
+    orch = _open_orch(db_path)
+    try:
+        try:
+            orch.retry_land(job_id, worktree_base=worktree_base)
+        except JobNotFound:
+            typer.echo(f"no such job: {job_id}", err=True)
+            raise typer.Exit(code=4) from None
+        except LandRetryError as exc:
+            msg = str(exc)
+            typer.echo(msg, err=True)
+            # "worktree missing" → exit 7 (worktree op failed per API.md)
+            if "worktree missing" in msg or "re-enqueue" in msg:
+                raise typer.Exit(code=7) from None
+            raise typer.Exit(code=1) from None
+    finally:
+        orch.close()
+
+    typer.echo(f"land retry queued for {job_id}")
 
 
 # Wire land and land-history as direct sub-commands on land_app

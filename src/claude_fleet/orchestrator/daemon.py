@@ -287,14 +287,25 @@ class Daemon:
     async def _start_land_attempts(self) -> None:
         """Transition ``audited``-PASS jobs into ``landing`` + spawn.
 
-        Runs only when ``auto_land`` is enabled. Idempotent per tick — a
-        job already owning a :class:`LandHandle` is skipped because it's
-        already in ``landing`` and being harvested by
-        :meth:`_harvest_land_handles`.
+        Also re-spawns orphaned ``landing`` jobs — jobs that are already in
+        ``landing`` status but have no active :class:`LandHandle`.  This
+        covers two cases:
+
+        1. Normal path: ``audited``-PASS jobs transition via
+           :meth:`Orchestrator.begin_landing`, then get spawned.
+        2. Retry path (G9): ``merge-blocked`` jobs reset to ``landing`` by
+           :meth:`Orchestrator.retry_land`. The next daemon tick detects them
+           here and re-spawns the land chain without needing a separate code
+           path in the daemon.
+
+        Idempotent per tick — a job already owning a :class:`LandHandle` is
+        always skipped regardless of how it entered ``landing``.
         """
 
         if self.land_backend is None:
             return
+
+        # Path 1: audited+PASS → begin_landing → spawn.
         for job in self.orch.list_jobs(status="audited"):
             if job.audit_verdict != "PASS":
                 continue
@@ -316,6 +327,29 @@ class Daemon:
             except Exception as exc:
                 log.exception(
                     "orchestrator.daemon.spawn_land_failed",
+                    job_id=job.id,
+                )
+                self.orch.mark_merge_blocked(
+                    job.id, "other", detail=f"spawn_land failed: {exc}"
+                )
+                self.notifier.merge_blocked(
+                    job.id, "other", detail=f"spawn_land failed: {exc}"
+                )
+                continue
+            self._land_handles[job.id] = handle
+
+        # Path 2: orphaned landing jobs (e.g. after retry_land or daemon
+        # restart) — already in ``landing`` but no handle in this daemon
+        # instance.  Spawn directly without calling begin_landing() again
+        # (land_attempts was already incremented by retry_land).
+        for job in self.orch.list_jobs(status="landing"):
+            if job.id in self._land_handles:
+                continue  # already in flight
+            try:
+                handle = await self.land_backend.spawn_land(job)
+            except Exception as exc:
+                log.exception(
+                    "orchestrator.daemon.spawn_land_orphan_failed",
                     job_id=job.id,
                 )
                 self.orch.mark_merge_blocked(

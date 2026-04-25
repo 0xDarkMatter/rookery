@@ -43,6 +43,7 @@ from claude_fleet.platform import claude_lb
 from claude_fleet.platform.headless_spawn import spawn_headless_claude
 from claude_fleet.platform.parcel_prompt import find_parcel_prompt
 from claude_fleet.platform.worktree_dir import ensure_worktree
+from claude_fleet.profile_selector import EnvVarSelector, ProfileSelector
 from claude_fleet.worktree import GitWorktreeLifecycle, WorktreeLifecycle
 
 log = structlog.get_logger(__name__)
@@ -240,6 +241,7 @@ class WorkerBackend(OrchestratorBackend):
         shutdown_grace_s: int = 30,
         claude_profile: str | None = "mknv74",
         worktree_lifecycle: WorktreeLifecycle | None = None,
+        profile_selector: ProfileSelector | None = None,
     ) -> None:
         self.repo_root = Path(repo_root)
         self.worktrees_root = Path(
@@ -252,14 +254,30 @@ class WorkerBackend(OrchestratorBackend):
         self.env_overrides = dict(env_overrides or {})
         self.shutdown_grace_s = shutdown_grace_s
         self.claude_profile = claude_profile
-        # Profile round-robin: env CLAUDE_FLEET_PROFILES="a,b,c" cycles
-        # through the named profiles on each spawn. When unset, falls back
-        # to the single `claude_profile`. Useful for spreading parcel
-        # dispatch across multiple Max accounts to avoid per-account rate limits.
-        profiles_env = os.environ.get("CLAUDE_FLEET_PROFILES", "").strip()
+
+        # G5: ProfileSelector — if explicitly injected, use it for every
+        # spawn.  If None but CLAUDE_FLEET_PROFILES is set in the environment,
+        # fall back to EnvVarSelector for backwards compat.  If neither,
+        # spawn without profile injection (legacy claude_profile / claude-lb
+        # pick_profile path below).
+        if profile_selector is not None:
+            self._profile_selector: ProfileSelector | None = profile_selector
+        else:
+            profiles_env = os.environ.get("CLAUDE_FLEET_PROFILES", "").strip()
+            if profiles_env:
+                self._profile_selector = EnvVarSelector(
+                    profiles=[p.strip() for p in profiles_env.split(",") if p.strip()]
+                )
+            else:
+                self._profile_selector = None
+
+        # Legacy round-robin ring — kept for the _next_profile() fallback path
+        # when no ProfileSelector is wired (i.e. _profile_selector is None and
+        # CLAUDE_FLEET_PROFILES was empty at construction time).
+        profiles_env_legacy = os.environ.get("CLAUDE_FLEET_PROFILES", "").strip()
         self._profile_ring: list[str] = (
-            [p.strip() for p in profiles_env.split(",") if p.strip()]
-            if profiles_env
+            [p.strip() for p in profiles_env_legacy.split(",") if p.strip()]
+            if profiles_env_legacy
             else []
         )
         self._profile_idx = 0
@@ -353,12 +371,32 @@ class WorkerBackend(OrchestratorBackend):
         worker_id = f"local-{uuid.uuid4().hex[:8]}"
         log_path = self._log_path(job.id)
 
-        # Rotate any stale access tokens before picking a profile.
-        # No-op and fast (~50ms) when nothing needs refresh.
-        await asyncio.to_thread(claude_lb.refresh_expired)
+        # G5: If a ProfileSelector is wired, use it to pick the profile and
+        # inject its env vars into the spawn environment.  The selector is
+        # responsible for any token refresh it requires (ClaudeLbSelector does
+        # --auto-refresh; EnvVarSelector is stateless).  When no selector is
+        # configured, fall back to the legacy claude-lb / ring-buffer path.
+        profile_env_extra: dict[str, str] = {}
+        if self._profile_selector is not None:
+            profile_info = await self._profile_selector.pick()
+            profile = profile_info.name
+            profile_env_extra = profile_info.env
+            log.debug(
+                "orchestrator.worker_backend.profile_selector_picked",
+                job_id=job.id,
+                profile=profile,
+            )
+        else:
+            # Legacy path: rotate any stale access tokens before picking.
+            await asyncio.to_thread(claude_lb.refresh_expired)
+            profile = self._next_profile()
 
-        profile = self._next_profile()
         env = self._build_env(profile_override=profile)
+        # Merge profile-selector env on top (may set CLAUDE_CODE_OAUTH_TOKEN,
+        # CLAUDE_CONFIG_DIR, etc.). Done after _build_env so the selector
+        # can override env vars that _build_env would have stripped.
+        if profile_env_extra:
+            env.update(profile_env_extra)
 
         # Resolve prompt before we touch git — fail fast on a typo'd job id.
         try:
