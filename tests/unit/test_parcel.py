@@ -68,6 +68,32 @@ class TestParcelNew:
         assert result == target
         assert "id: task" in target.read_text(encoding="utf-8")
 
+    def test_parcel_new_force_overwrites_existing(self, tmp_path: Path) -> None:
+        """Calling parcel_new twice with force=True succeeds both times."""
+        target = tmp_path / "regen.md"
+        parcel_new("regen", prompt_path=target, force=True)
+        first_content = target.read_text(encoding="utf-8")
+
+        # Second call must succeed and produce valid parcel content
+        result = parcel_new("regen", prompt_path=target, force=True)
+
+        assert result == target
+        second_content = target.read_text(encoding="utf-8")
+        assert "id: regen" in second_content
+        # Content is regenerated (identical template, but the write succeeded)
+        assert second_content == first_content
+
+    def test_parcel_new_no_force_raises_on_existing(self, tmp_path: Path) -> None:
+        """Second call without force=True raises FileExistsError (regression guard)."""
+        target = tmp_path / "once.md"
+        parcel_new("once", prompt_path=target, force=False)
+
+        with pytest.raises(FileExistsError):
+            parcel_new("once", prompt_path=target, force=False)
+
+        # Original content is preserved unchanged
+        assert "id: once" in target.read_text(encoding="utf-8")
+
 
 # ---------------------------------------------------------------------------
 # parcel_validate tests
@@ -188,6 +214,40 @@ id: empty-body
 
         assert result.ok is False
         assert any("body" in e for e in result.errors)
+
+    def test_parcel_validate_empty_body_fails(self, tmp_path: Path) -> None:
+        """Parcel with valid frontmatter but no body returns validation failure."""
+        content = """\
+---
+id: no-body
+priority: 0
+deps: []
+---
+"""
+        path = tmp_path / "no-body.md"
+        _write_parcel(path, content)
+
+        result = parcel_validate(path)
+
+        assert result.ok is False
+        assert any(
+            "parcel body is empty" in e and "claude -p" in e
+            for e in result.errors
+        )
+
+    def test_parcel_validate_whitespace_only_body_fails(self, tmp_path: Path) -> None:
+        """Body consisting solely of whitespace is treated as empty."""
+        content = "---\nid: ws-body\npriority: 0\ndeps: []\n---\n\n   \n\n"
+        path = tmp_path / "ws-body.md"
+        _write_parcel(path, content)
+
+        result = parcel_validate(path)
+
+        assert result.ok is False
+        assert any(
+            "parcel body is empty" in e and "claude -p" in e
+            for e in result.errors
+        )
 
     def test_warns_on_missing_parcel_done_reference(self, tmp_path: Path) -> None:
         content = """\

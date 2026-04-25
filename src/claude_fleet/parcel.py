@@ -200,7 +200,9 @@ def parcel_validate(path: Path) -> ValidationResult:
 
     # 6. Body non-empty
     if not body.strip():
-        errors.append("parcel body is empty")
+        errors.append(
+            "parcel body is empty — `claude -p` would receive no prompt"
+        )
 
     # 7. PARCEL_DONE reference (warn only)
     if "id" in fm and body.strip():
