@@ -45,3 +45,8 @@ logs/
 # Build status files used by extraction harness
 BUILD_DONE.md
 BUILD_BLOCKED.md
+
+# Claude Code session-local state (never tracked)
+.claude/settings.local.json
+.claude/scheduled_tasks.lock
+.claude/worktrees/
