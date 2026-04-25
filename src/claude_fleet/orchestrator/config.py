@@ -13,6 +13,28 @@ from typing import Literal
 from pydantic import BaseModel, ConfigDict, Field
 
 
+class ClaudeLbConfig(BaseModel):
+    """Configuration for the optional ``claude-lb`` integration (G5).
+
+    When ``enabled=True``, the orchestrator constructs a
+    :class:`~claude_fleet.profile_selector.ClaudeLbSelector` from *binary*
+    and *pick_args* instead of the default
+    :class:`~claude_fleet.profile_selector.EnvVarSelector`.
+
+    Attributes:
+        enabled:   Whether to use ``claude-lb`` for profile selection.
+        binary:    Path or name of the ``claude-lb`` executable. Defaults
+                   to ``"claude-lb"`` (resolved via PATH).
+        pick_args: Extra CLI arguments forwarded to ``claude-lb pick``.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    enabled: bool = False
+    binary: str = "claude-lb"
+    pick_args: list[str] = ["--auto-refresh"]
+
+
 class AuditLoopConfig(BaseModel):
     """Tuning knobs for the audit-and-fix iteration cycle.
 
@@ -87,13 +109,23 @@ class OrchestratorConfig(BaseModel):
     # sub-directories.  Defaults to ``./worktrees/`` relative to the CWD.
     worktree_base: Path = Field(default=Path("./worktrees"))
 
+    # G8: minimum age (in hours) before a terminal-status worktree is
+    # considered an orphan eligible for ``worktree sweep``.  Default 168 h
+    # (7 days) gives operators a full week to inspect landed worktrees
+    # before sweep removes them.
+    orphan_age_hours: float = Field(default=168.0, gt=0)
+
     # G4: which verdict adapter to use when harvesting worker completions.
     # Registered built-ins: marker-file | exit-code | json-result.
     # Override per-parcel via frontmatter ``verdict_adapter:`` key.
     verdict_adapter: str = "marker-file"
 
+    # G5: claude-lb integration — health-aware profile selection.
+    # Disabled by default; set claude_lb.enabled=true to activate.
+    claude_lb: ClaudeLbConfig = Field(default_factory=ClaudeLbConfig)
+
     # R2-5 audit-loop knobs (absorbs scripts/auto-feedback-loop.sh).
     audit_loop: AuditLoopConfig = Field(default_factory=AuditLoopConfig)
 
 
-__all__ = ["AuditLoopConfig", "OrchestratorConfig"]
+__all__ = ["AuditLoopConfig", "ClaudeLbConfig", "OrchestratorConfig"]
