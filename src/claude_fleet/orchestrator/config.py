@@ -7,8 +7,9 @@ present (headless pm2 services, tests, ad-hoc CLI invocation).
 
 from __future__ import annotations
 
+import warnings
 from pathlib import Path
-from typing import Literal
+from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -105,9 +106,15 @@ class OrchestratorConfig(BaseModel):
     # daemon enforces this at the call site regardless of backend config.
     retire_only_after_landed: bool = True
 
-    # G1: worktree_base is the root directory that holds per-job worktree
-    # sub-directories.  Defaults to ``./worktrees/`` relative to the CWD.
-    worktree_base: Path = Field(default=Path("./worktrees"))
+    # G1: worktree_base is the DEPRECATED name for worktrees_root (kept for
+    # backward compatibility with code that reads config.worktree_base directly,
+    # e.g. doctor.py).  load_config() maps the yaml field 'worktree_base' to
+    # 'worktrees_root' and emits a DeprecationWarning.  New code should read
+    # config.worktrees_root exclusively.
+    worktree_base: Path | None = Field(
+        default=None,
+        description="Deprecated alias for worktrees_root. Use worktrees_root.",
+    )
 
     # G8: minimum age (in hours) before a terminal-status worktree is
     # considered an orphan eligible for ``worktree sweep``.  Default 168 h
@@ -128,4 +135,52 @@ class OrchestratorConfig(BaseModel):
     audit_loop: AuditLoopConfig = Field(default_factory=AuditLoopConfig)
 
 
-__all__ = ["AuditLoopConfig", "ClaudeLbConfig", "OrchestratorConfig"]
+def load_config(path: Path | None = None) -> "OrchestratorConfig":
+    """Load :class:`OrchestratorConfig` from a YAML file.
+
+    If *path* is ``None`` or the file does not exist, returns a default
+    :class:`OrchestratorConfig`.
+
+    Canonical field name is ``worktrees_root``.  The deprecated alias
+    ``worktree_base`` (from earlier API.md drafts) is accepted but emits a
+    single :class:`DeprecationWarning` and is mapped to ``worktrees_root``
+    before validation.
+
+    Args:
+        path: Path to ``claude-fleet.yaml``.  Pass ``None`` to skip loading.
+
+    Returns:
+        A validated :class:`OrchestratorConfig` instance.
+    """
+    if path is None or not Path(path).exists():
+        return OrchestratorConfig()
+
+    try:
+        import yaml  # noqa: PLC0415
+    except ImportError:
+        return OrchestratorConfig()
+
+    raw = Path(path).read_text(encoding="utf-8")
+    data: Any = yaml.safe_load(raw)
+    if not isinstance(data, dict):
+        return OrchestratorConfig()
+
+    # Handle deprecated alias: worktree_base → worktrees_root
+    if "worktree_base" in data and "worktrees_root" not in data:
+        warnings.warn(
+            "claude-fleet.yaml: 'worktree_base' is deprecated; "
+            "rename it to 'worktrees_root'.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
+        data["worktrees_root"] = data.pop("worktree_base")
+    elif "worktree_base" in data:
+        # Both present: canonical wins, silently drop alias.
+        data.pop("worktree_base")
+
+    known = set(OrchestratorConfig.model_fields)
+    filtered = {k: v for k, v in data.items() if k in known}
+    return OrchestratorConfig.model_validate(filtered)
+
+
+__all__ = ["AuditLoopConfig", "ClaudeLbConfig", "OrchestratorConfig", "load_config"]

@@ -286,8 +286,12 @@ def _check_database(config: OrchestratorConfig | None) -> CheckResult:
 
 
 def _check_worktree_base(config: OrchestratorConfig | None) -> CheckResult:
-    """Check 5: worktree_base is writable."""
-    if config is not None and config.worktree_base:
+    """Check 5: worktrees_root (or deprecated worktree_base) is writable."""
+    if config is not None and config.worktrees_root:
+        base = config.worktrees_root
+    elif config is not None and config.worktree_base:
+        # Deprecated alias — still honoured so existing deployments that set
+        # worktree_base in their yaml aren't silently broken by doctor.
         base = config.worktree_base
     else:
         base = Path("./worktrees")

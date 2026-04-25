@@ -94,7 +94,7 @@ def start_cmd(
     if profiles:
         os.environ["CLAUDE_FLEET_PROFILES"] = profiles
 
-    from claude_fleet.orchestrator.config import OrchestratorConfig  # noqa: PLC0415
+    from claude_fleet.orchestrator.config import OrchestratorConfig, load_config  # noqa: PLC0415
     from claude_fleet.orchestrator.daemon import run_daemon  # noqa: PLC0415
     from claude_fleet.orchestrator.orchestrator import Orchestrator  # noqa: PLC0415
     from claude_fleet.orchestrator.worker_backend import WorkerBackend  # noqa: PLC0415
@@ -103,10 +103,21 @@ def start_cmd(
 
     console = Console()
 
-    # Load config — for P3 we just use defaults if config file is missing
-    cfg = OrchestratorConfig()
+    # Resolution order:
+    #   1. explicit --db flag (or CLAUDE_FLEET_DB env var, wired via typer envvar=)
+    #   2. yaml db_path / worktrees_root from --config file (load_config handles
+    #      the deprecated 'worktree_base' alias automatically)
+    #   3. hardcoded fallback ./claude-fleet.db when neither source sets db_path
+    cfg = load_config(Path(config))
+
+    # Apply the hardcoded db_path fallback only when the yaml also didn't set it
+    # (load_config returns the pydantic default .data/orchestrator.db in that case)
+    if cfg.db_path == Path(".data/orchestrator.db"):
+        cfg = cfg.model_copy(update={"db_path": Path("./claude-fleet.db")})
+
+    # --db flag (or CLAUDE_FLEET_DB) wins over everything
     if db:
-        cfg = OrchestratorConfig(db_path=Path(db))
+        cfg = cfg.model_copy(update={"db_path": Path(db)})
 
     resolved_pidfile = Path(pidfile) if pidfile else _DEFAULT_PIDFILE
     repo_root = Path.cwd()
