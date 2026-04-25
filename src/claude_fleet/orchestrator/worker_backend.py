@@ -43,6 +43,7 @@ from claude_fleet.platform import claude_lb
 from claude_fleet.platform.headless_spawn import spawn_headless_claude
 from claude_fleet.platform.parcel_prompt import find_parcel_prompt
 from claude_fleet.platform.worktree_dir import ensure_worktree
+from claude_fleet.worktree import GitWorktreeLifecycle, WorktreeLifecycle
 
 log = structlog.get_logger(__name__)
 
@@ -238,11 +239,16 @@ class WorkerBackend(OrchestratorBackend):
         env_overrides: dict[str, str] | None = None,
         shutdown_grace_s: int = 30,
         claude_profile: str | None = "mknv74",
+        worktree_lifecycle: WorktreeLifecycle | None = None,
     ) -> None:
         self.repo_root = Path(repo_root)
         self.worktrees_root = Path(
             worktrees_root or self.repo_root.parent / "claude-fleet-worktrees"
         )
+        # G1: If a WorktreeLifecycle is injected, it takes responsibility for
+        # creating/querying worktrees.  Otherwise the legacy ensure_worktree
+        # helper is used so existing deployments are unaffected.
+        self._worktree_lifecycle: WorktreeLifecycle | None = worktree_lifecycle
         self.env_overrides = dict(env_overrides or {})
         self.shutdown_grace_s = shutdown_grace_s
         self.claude_profile = claude_profile
@@ -360,13 +366,19 @@ class WorkerBackend(OrchestratorBackend):
         except FileNotFoundError as exc:
             raise RuntimeError(f"spawn failed for {job.id}: {exc}") from exc
 
-        # Create / reuse the parcel worktree. Pass env so SYSTEM-run git
-        # sees the safe.directory injection.
+        # Create / reuse the parcel worktree.
+        # When a WorktreeLifecycle is injected (G1), delegate to it so that
+        # the lifecycle ABC owns worktree creation end-to-end.  Otherwise fall
+        # back to the platform-level ensure_worktree helper, passing env so
+        # SYSTEM-run git sees the safe.directory injection.
         try:
-            worktree = await asyncio.to_thread(
-                ensure_worktree, job.id, self.repo_root, env=env
-            )
-        except RuntimeError as exc:
+            if self._worktree_lifecycle is not None:
+                worktree = await self._worktree_lifecycle.create(job)
+            else:
+                worktree = await asyncio.to_thread(
+                    ensure_worktree, job.id, self.repo_root, env=env
+                )
+        except (RuntimeError, Exception) as exc:
             raise RuntimeError(f"spawn failed for {job.id}: {exc}") from exc
 
         log.info(

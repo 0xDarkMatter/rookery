@@ -77,6 +77,10 @@ class OrchestratorConfig(BaseModel):
     auto_retire_idle_minutes: int = 60
     auto_retire_batch_size: int = 1
 
+    # G1: worktree_base is the root directory that holds per-job worktree
+    # sub-directories.  Defaults to ``./worktrees/`` relative to the CWD.
+    worktree_base: Path = Field(default=Path("./worktrees"))
+
     # R2-5 audit-loop knobs (absorbs scripts/auto-feedback-loop.sh).
     audit_loop: AuditLoopConfig = Field(default_factory=AuditLoopConfig)
 
