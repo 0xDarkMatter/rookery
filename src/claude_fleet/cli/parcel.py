@@ -1,17 +1,20 @@
 """Parcel management sub-commands for ``claude-fleet parcel ...``.
 
-parcel new      — scaffold a parcel template (G3 stub)
-parcel validate — validate a parcel file (G3 stub)
+parcel new      — scaffold a parcel template (G3)
+parcel validate — validate a parcel file (G3)
 parcel build    — alias for enqueue (spec → queue)
 """
 
 from __future__ import annotations
 
+import json
 from pathlib import Path
 
 import typer
+from rich.console import Console
 
 from claude_fleet.cli.queue import enqueue_cmd
+from claude_fleet.parcel import parcel_new, parcel_validate
 
 parcel_app = typer.Typer(
     name="parcel",
@@ -30,37 +33,64 @@ def parcel_new_cmd(
         "--prompt",
         help="Output path for the generated parcel file. Defaults to parcels/<id>.md.",
     ),
+    force: bool = typer.Option(
+        False,
+        "--force",
+        help="Overwrite an existing parcel file.",
+    ),
 ) -> None:
-    """Scaffold a parcel template file at parcels/<id>.md.
-
-    TODO(P5 G3): implement parcel scaffolding.
-    """
-    # TODO(P5 G3): implement — create parcels/<id>.md with default frontmatter
-    out_path = prompt or f"parcels/{parcel_id}.md"
-    typer.echo(
-        f"TODO: parcel new is not yet implemented (target: {out_path}). "
-        "Implement in P5 (G3).",
-        err=True,
-    )
-    raise typer.Exit(code=1)
+    """Scaffold a parcel template file at parcels/<id>.md."""
+    prompt_path = Path(prompt) if prompt else None
+    try:
+        target = parcel_new(parcel_id, prompt_path=prompt_path, force=force)
+    except FileExistsError as exc:
+        Console(stderr=True).print(
+            f"[red]error:[/red] file already exists: {exc}. Use --force to overwrite."
+        )
+        raise typer.Exit(code=1) from None
+    Console().print(f"[green]created[/green] {target}")
 
 
 @parcel_app.command("validate")
 def parcel_validate_cmd(
     ctx: typer.Context,
     path: str = typer.Argument(..., help="Path to the parcel file to validate."),
+    json_output: bool = typer.Option(
+        False,
+        "--json",
+        help="Emit structured JSON instead of human-readable output.",
+    ),
 ) -> None:
-    """Validate a parcel file's frontmatter and structure.
+    """Validate a parcel file's frontmatter and structure."""
+    result = parcel_validate(Path(path))
 
-    TODO(P5 G3): implement parcel validation.
-    """
-    # TODO(P5 G3): implement — parse frontmatter, check required fields
-    typer.echo(
-        f"TODO: parcel validate is not yet implemented (path: {path}). "
-        "Implement in P5 (G3).",
-        err=True,
-    )
-    raise typer.Exit(code=1)
+    if json_output:
+        typer.echo(
+            json.dumps(
+                {
+                    "ok": result.ok,
+                    "errors": result.errors,
+                    "warnings": result.warnings,
+                },
+                indent=2,
+            )
+        )
+        raise typer.Exit(code=0 if result.ok else 1)
+
+    console = Console()
+    console_err = Console(stderr=True)
+
+    for err in result.errors:
+        console_err.print(f"[red]error:[/red] {err}")
+    for warn in result.warnings:
+        console.print(f"[yellow]warning:[/yellow] {warn}")
+
+    if result.ok:
+        console.print(f"[green]ok[/green] {path}")
+    else:
+        console_err.print(f"[red]invalid[/red] {path} ({len(result.errors)} error(s))")
+
+    raise typer.Exit(code=0 if result.ok else 1)
 
 
 @parcel_app.command("build")
