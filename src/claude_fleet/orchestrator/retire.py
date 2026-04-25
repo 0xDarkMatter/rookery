@@ -1,6 +1,6 @@
 """Auto-retire landed parcel worktrees.
 
-Symmetric counterpart to :mod:`axiom.orchestrator.land_backend`. Where
+Symmetric counterpart to :mod:`claude_fleet.orchestrator.land_backend`. Where
 landing moves the work onto ``main``, retirement removes the now-redundant
 parcel worktree from disk via ``git worktree remove``.
 
@@ -47,7 +47,7 @@ from pathlib import Path
 
 import structlog
 
-from axiom.orchestrator.backend import Job
+from claude_fleet.orchestrator.backend import Job
 
 log = structlog.get_logger(__name__)
 

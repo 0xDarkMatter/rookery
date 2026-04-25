@@ -2,21 +2,16 @@
 
 ``claude-lb`` is a health-aware picker + probe + OAuth-refresh tool for
 Claude Code Max profiles (the ``~/.claude-profiles/<name>/`` directories
-that let one machine juggle multiple Anthropic accounts). Axiom's
-:class:`axiom.orchestrator.worker_backend.WorkerBackend` used to
-hand-roll all of this:
+that let one machine juggle multiple Anthropic accounts).
+:class:`claude_fleet.orchestrator.worker_backend.WorkerBackend` delegates
+profile selection and OAuth refresh to it.
 
-- Round-robin over a comma-list of profile names.
-- Scan ``C:\\Users\\*\\.claude-profiles\\<name>`` for the credentials dir.
-- No OAuth refresh at all — stale access tokens just 401'd until the
-  worker crashed.
-
-Delegating to ``claude-lb`` replaces that with:
+Delegating to ``claude-lb`` provides:
 
 - Health-aware picking (ok / degraded / exhausted).
 - Cached credentials-dir resolution via ``claude-lb show --json``.
 - ``claude-lb refresh --expired`` that exchanges stored refresh tokens
-  for fresh access tokens (SPEC §10).
+  for fresh access tokens.
 
 Every function here is best-effort: if ``claude-lb`` isn't on PATH, or
 a subprocess fails, returns ``None`` / no-op and lets the caller fall
@@ -59,7 +54,7 @@ def _discover_bin() -> str | None:
 
     Resolution order (mirrors the claude.exe discovery in WorkerBackend):
 
-    1. ``AXIOM_CLAUDE_LB_BIN`` env var — absolute path override.
+    1. ``CLAUDE_FLEET_LB_BIN`` env var — absolute path override.
     2. :func:`shutil.which` — hits when the daemon's own PATH already has it.
     3. Scan ``C:\\Users\\*\\.local\\bin\\claude-lb.exe`` — canonical user-scoped
        install, invisible to SYSTEM-run daemons by default.
@@ -67,7 +62,7 @@ def _discover_bin() -> str | None:
     Returns the full executable path or ``None``. Cached — cheap to call
     repeatedly from the spawn hot path.
     """
-    explicit = os.environ.get("AXIOM_CLAUDE_LB_BIN")
+    explicit = os.environ.get("CLAUDE_FLEET_LB_BIN")
     if explicit and Path(explicit).is_file():
         return explicit
 

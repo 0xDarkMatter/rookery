@@ -1,9 +1,8 @@
 """Orchestrator configuration model.
 
-Lives in its own module (rather than :mod:`axiom.platform.config`) to keep
-the queue decoupled from the strict root ``AxiomConfig`` — the orchestrator
-runs host-side and may be used in contexts where ``config.yaml`` is absent
-(headless pm2 services, tests, ad-hoc CLI invocation).
+Lives in its own module to keep the queue self-contained — the orchestrator
+runs host-side and may be used in contexts where no external config file is
+present (headless pm2 services, tests, ad-hoc CLI invocation).
 """
 
 from __future__ import annotations
@@ -15,12 +14,7 @@ from pydantic import BaseModel, ConfigDict, Field
 
 
 class AuditLoopConfig(BaseModel):
-    """Tuning for :class:`axiom.orchestrator.audit_loop.AuditLoop`.
-
-    Absorbed from ``scripts/auto-feedback-loop.sh`` (R2-5). The bash
-    hardcoded ``MAX_ITER=3`` and slept 60 s between ticks; the CLI
-    version exposes both as config knobs so operators don't have to
-    edit a script to change them.
+    """Tuning knobs for the audit-and-fix iteration cycle.
 
     Attributes:
         max_iter: Cap on total audit iterations (including the first).
@@ -58,14 +52,13 @@ class OrchestratorConfig(BaseModel):
     shutdown_grace_s: int = 30
     worktrees_root: Path | None = None
     claude_profile: str | None = Field(
-        default="mknv74",
+        default=None,
         description=(
             "Name of the claude CLI profile (``~/.claude-profiles/<name>``) "
-            "used by spawned parcel sessions. The default 'mknv74' matches "
-            "the project's parcel-lane convention. Set to None to fall back "
+            "used by spawned parcel sessions. Set to None to fall back "
             "to the default ``~/.claude`` profile. Override per-invocation "
-            "with env var ``AXIOM_CLAUDE_PROFILE``, or bypass profile "
-            "selection entirely with ``AXIOM_CLAUDE_CONFIG_DIR`` (absolute "
+            "with env var ``CLAUDE_FLEET_PROFILE``, or bypass profile "
+            "selection entirely with ``CLAUDE_FLEET_CONFIG_DIR`` (absolute "
             "path to any directory containing ``.credentials.json``)."
         ),
     )

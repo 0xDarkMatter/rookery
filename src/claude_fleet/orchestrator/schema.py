@@ -1,6 +1,6 @@
 """Schema migrations for the orchestrator's SQLite queue.
 
-Migrations are raw ``.sql`` files under :mod:`axiom.orchestrator.migrations`,
+Migrations are raw ``.sql`` files under :mod:`claude_fleet.orchestrator.migrations`,
 applied in lexicographic order. An ``_applied_migrations`` bookkeeping table
 records which files have run so reruns are idempotent.
 """

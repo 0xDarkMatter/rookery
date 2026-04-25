@@ -201,7 +201,7 @@ def patterns_overlap(a: str, b: str) -> bool:
 
     - Equal patterns → overlap.
     - Neither is a glob → overlap only when one is a directory prefix of
-      the other (``src/axiom/`` vs ``src/axiom/cli.py``).
+      the other (``src/pkg/`` vs ``src/pkg/cli.py``).
     - One is a glob, the other a literal path → the glob matches the
       literal iff :func:`fnmatch.fnmatchcase` / :meth:`PurePosixPath.match`
       says so.

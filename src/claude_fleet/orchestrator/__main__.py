@@ -1,8 +1,13 @@
-"""Entrypoint: ``python -m axiom.orchestrator`` defers to the Typer CLI."""
+"""Entrypoint: ``python -m claude_fleet.orchestrator`` defers to the Typer CLI.
+
+TODO(P3): wire up claude_fleet.cli once the CLI surface is built.
+"""
 
 from __future__ import annotations
 
-from axiom.orchestrator.cli import app
-
 if __name__ == "__main__":
-    app()
+    # TODO(P3): replace with `from claude_fleet.cli.main import cli_main; cli_main()`
+    raise NotImplementedError(
+        "CLI not yet implemented. Run `python -m claude_fleet.orchestrator` "
+        "after P3 (CLI surface) is complete."
+    )

@@ -1,7 +1,7 @@
 """Land a parcel branch onto ``main`` via rebase / test / fast-forward.
 
 :class:`LandBackend` is the auto-land counterpart of
-:class:`axiom.orchestrator.worker_backend.WorkerBackend`: it executes a
+:class:`claude_fleet.orchestrator.worker_backend.WorkerBackend`: it executes a
 fixed, bounded git sequence as a subprocess chain rather than spawning a
 new ``claude -p`` session. The daemon hands off to it when a job reaches
 terminal ``audited`` with verdict ``PASS`` and ``auto_land`` is enabled.
@@ -36,8 +36,8 @@ from pathlib import Path
 
 import structlog
 
-from axiom.orchestrator.backend import Job
-from axiom.orchestrator.land_events import EventSink, LandHandle, LandResult
+from claude_fleet.orchestrator.backend import Job
+from claude_fleet.orchestrator.land_events import EventSink, LandHandle, LandResult
 
 log = structlog.get_logger(__name__)
 
@@ -59,7 +59,7 @@ class LandBackend:
     worktrees_root:
         Directory that holds sibling parcel worktrees. Defaults to the
         sibling of ``repo_root`` used by :class:`WorkerBackend`
-        (``<repo_root>/../Axiom-worktrees``). The parcel branch is assumed
+        (``<repo_root>/../claude-fleet-worktrees``). The parcel branch is assumed
         to be checked out at ``<worktrees_root>/<job.id>``, the canonical
         layout the worker-spawn pipeline creates.
     test_cmd:
@@ -96,7 +96,7 @@ class LandBackend:
     ) -> None:
         self.repo_root = Path(repo_root)
         self.worktrees_root = Path(
-            worktrees_root or self.repo_root.parent / "Axiom-worktrees"
+            worktrees_root or self.repo_root.parent / "claude-fleet-worktrees"
         )
         self.test_cmd = test_cmd
         self.timeout_s = timeout_s

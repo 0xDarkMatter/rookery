@@ -1,11 +1,10 @@
 """Resolve a parcel id to its prompt markdown file.
 
-Every launch surface (``axiom launch parcel``, the orchestrator's
-``WorkerBackend``) needs the same lookup: given a parcel id like
-``W19-parcel-dashboard`` or ``P1``, find ``<id>.md`` somewhere under
+Every launch surface needs the same lookup: given a parcel id like
+``my-feature`` or ``P1``, find ``<id>.md`` somewhere under
 ``parcels/`` (but never under ``parcels/**/templates/``).
 
-Kept separate from :mod:`axiom.platform.worktree_dir` because its
+Kept separate from :mod:`claude_fleet.platform.worktree_dir` because its
 concern is *files*, not the git worktree that hosts them.
 """
 

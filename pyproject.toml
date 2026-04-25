@@ -47,8 +47,10 @@ dev = [
 ]
 
 [project.scripts]
-claude-fleet = "claude_fleet.cli.main:cli_main"
-claude-fleetd = "claude_fleet.orchestrator.__main__:main"
+# TODO(P3): uncomment once CLI is built
+# claude-fleet = "claude_fleet.cli.main:cli_main"
+# TODO(P3): uncomment once CLI is built
+# claude-fleetd = "claude_fleet.orchestrator.__main__:main"
 
 [project.urls]
 Homepage = "https://github.com/macknevill/claude-fleet"

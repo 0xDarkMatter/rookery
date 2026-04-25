@@ -2,7 +2,7 @@
 
 Transport-free. The orchestrator itself does not spawn workers; it hands
 jobs to an injected :class:`OrchestratorBackend`. The daemon loop
-(:mod:`axiom.orchestrator.daemon`) is the sole consumer of the claim /
+(:mod:`claude_fleet.orchestrator.daemon`) is the sole consumer of the claim /
 heartbeat / reclaim surface.
 """
 
@@ -18,7 +18,7 @@ from typing import Any
 
 import structlog
 
-from axiom.orchestrator.backend import (
+from claude_fleet.orchestrator.backend import (
     AuditReport,
     AuditVerdict,
     Job,
@@ -28,7 +28,7 @@ from axiom.orchestrator.backend import (
     LandPhase,
     MergeBlockReason,
 )
-from axiom.orchestrator.schema import apply_migrations, open_connection
+from claude_fleet.orchestrator.schema import apply_migrations, open_connection
 
 log = structlog.get_logger(__name__)
 

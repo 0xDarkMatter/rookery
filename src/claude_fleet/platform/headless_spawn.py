@@ -3,7 +3,7 @@
 The core launch sequence for every parcel worker:
 
 * ``cd`` into the parcel worktree
-* Export ``AXIOM_WORKTREE_ID`` so the child uses our canonical id
+* Export ``CLAUDE_FLEET_WORKTREE_ID`` so the child uses our canonical id
 * ``claude -p [--model ...] --dangerously-skip-permissions`` with the
   prompt piped in via stdin (argv on Windows caps at ~32 KB; our parcel
   prompts regularly exceed that)
@@ -25,7 +25,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from axiom.platform.worktree_id import resolve_worktree_id
+from claude_fleet.platform.worktree_id import resolve_worktree_id
 
 IS_WINDOWS = sys.platform == "win32"
 
@@ -103,9 +103,9 @@ def spawn_headless_claude(
     argv.append("--dangerously-skip-permissions")
 
     base_env = dict(env) if env is not None else dict(os.environ)
-    # Propagate (or derive) AXIOM_WORKTREE_ID so the child's journal/pigeon
-    # emitters see the same canonical id as the parent launch surface.
-    base_env.setdefault("AXIOM_WORKTREE_ID", resolve_worktree_id(worktree))
+    # Propagate (or derive) CLAUDE_FLEET_WORKTREE_ID so the child sees the
+    # same canonical id as the parent launch surface.
+    base_env.setdefault("CLAUDE_FLEET_WORKTREE_ID", resolve_worktree_id(worktree))
     if extra_env:
         base_env.update(extra_env)
     env = base_env

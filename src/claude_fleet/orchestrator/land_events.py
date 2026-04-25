@@ -1,6 +1,6 @@
 """Typed outcome / handle models for :class:`LandBackend`.
 
-Deliberately kept out of :mod:`axiom.orchestrator.backend` because the
+Deliberately kept out of :mod:`claude_fleet.orchestrator.backend` because the
 OrchestratorBackend ABC is about build workers; land attempts are a
 different concern (no worktree spawn, no claude subprocess, no heartbeat).
 """
@@ -11,7 +11,7 @@ import asyncio
 from dataclasses import dataclass
 from typing import Literal, Protocol, runtime_checkable
 
-from axiom.orchestrator.backend import LandOutcome, LandPhase
+from claude_fleet.orchestrator.backend import LandOutcome, LandPhase
 
 # The subset of ``LandOutcome`` values that a full attempt can terminate on.
 # ``skipped`` is a per-phase marker (e.g. fetch-skipped-on-dry-run) and never

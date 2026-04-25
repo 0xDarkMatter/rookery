@@ -1,4 +1,4 @@
-"""WorkerBackend: spawn parcel workers via the :mod:`axiom.platform` API.
+"""WorkerBackend: spawn parcel workers via the :mod:`claude_fleet.platform` API.
 
 Each worker runs in an isolated git worktree under
 ``<worktrees_root>/<job.id>/``. Completion is signalled by the worker
@@ -16,12 +16,14 @@ Pipeline per spawn::
 
 Safety rails:
 
-- If ``ANTHROPIC_API_KEY`` is set in the host env, the spawn is refused.
+- If ``ANTHROPIC_API_KEY`` is set in the host env, the spawn is refused
+  (OAuth-only policy — parcel sessions must authenticate via Claude Max profiles,
+  not API keys, to ensure they use the correct plan limits and auth context).
 - Profile-based auth wins: ``CLAUDE_CODE_OAUTH_TOKEN`` stripped from the
   per-spawn env so the claude CLI reads ``<profile>/.credentials.json``.
 
-Paired with :class:`axiom.orchestrator.land_backend.LandBackend` — worker
-phase runs; land phase merges to main.
+Paired with :class:`claude_fleet.orchestrator.land_backend.LandBackend` —
+worker phase runs; land phase merges to main.
 """
 
 from __future__ import annotations
@@ -36,11 +38,11 @@ from pathlib import Path
 
 import structlog
 
-from axiom.orchestrator.backend import Job, OrchestratorBackend, WorkerHandle
-from axiom.platform import claude_lb
-from axiom.platform.headless_spawn import spawn_headless_claude
-from axiom.platform.parcel_prompt import find_parcel_prompt
-from axiom.platform.worktree_dir import ensure_worktree
+from claude_fleet.orchestrator.backend import Job, OrchestratorBackend, WorkerHandle
+from claude_fleet.platform import claude_lb
+from claude_fleet.platform.headless_spawn import spawn_headless_claude
+from claude_fleet.platform.parcel_prompt import find_parcel_prompt
+from claude_fleet.platform.worktree_dir import ensure_worktree
 
 log = structlog.get_logger(__name__)
 
@@ -80,10 +82,10 @@ def _resolve_claude_config_dir(profile: str | None) -> str | None:
 
     Resolution (first hit wins):
 
-    1. ``AXIOM_CLAUDE_CONFIG_DIR`` env var — absolute path override. Takes
+    1. ``CLAUDE_FLEET_CONFIG_DIR`` env var — absolute path override. Takes
        precedence over everything so operators can point the daemon at a
        purpose-built credentials dir without editing config.
-    2. ``AXIOM_CLAUDE_PROFILE`` env var — profile name override.
+    2. ``CLAUDE_FLEET_PROFILE`` env var — profile name override.
     3. ``claude-lb show <profile> --json`` when the CLI is installed. This
        is the canonical resolver: health-cached, single source of truth
        for profile → credentials-path mapping.
@@ -92,11 +94,11 @@ def _resolve_claude_config_dir(profile: str | None) -> str | None:
     5. If profile is None or not found: fall back to the user's default
        ``~/.claude/`` dir.
     """
-    explicit = os.environ.get("AXIOM_CLAUDE_CONFIG_DIR")
+    explicit = os.environ.get("CLAUDE_FLEET_CONFIG_DIR")
     if explicit and Path(explicit).is_dir():
         return explicit
 
-    env_profile = os.environ.get("AXIOM_CLAUDE_PROFILE")
+    env_profile = os.environ.get("CLAUDE_FLEET_PROFILE")
     effective_profile = env_profile or profile
 
     # Preferred: delegate to claude-lb (cached, health-aware).
@@ -128,7 +130,7 @@ def _discover_claude_bin_dir() -> str | None:
 
     Resolution order:
 
-    1. ``AXIOM_CLAUDE_BIN_DIR`` env var (operator override, e.g. set in
+    1. ``CLAUDE_FLEET_BIN_DIR`` env var (operator override, e.g. set in
        pm2 ecosystem.config.js when auto-detect doesn't fit)
     2. ``shutil.which("claude")`` — hits when the daemon's own PATH already
        includes claude (interactive dev runs)
@@ -139,7 +141,7 @@ def _discover_claude_bin_dir() -> str | None:
     Returns the directory containing ``claude.exe``, or ``None`` if not
     found. Caller is responsible for prepending to PATH.
     """
-    explicit = os.environ.get("AXIOM_CLAUDE_BIN_DIR")
+    explicit = os.environ.get("CLAUDE_FLEET_BIN_DIR")
     if explicit and Path(explicit).is_dir():
         return explicit
 
@@ -208,10 +210,10 @@ class WorkerBackend(OrchestratorBackend):
     Parameters
     ----------
     repo_root:
-        Path to the Axiom repo.
+        Path to the project repo.
     worktrees_root:
         Directory that holds sibling worktrees. Defaults to
-        ``<repo_root>/../Axiom-worktrees``.
+        ``<repo_root>/../claude-fleet-worktrees``.
     env_overrides:
         Extra environment variables layered onto :data:`os.environ` before
         spawning. Tests use this to skip the OAuth check. Empty-string
@@ -222,9 +224,9 @@ class WorkerBackend(OrchestratorBackend):
         Default claude CLI profile to use for spawned parcel sessions
         (resolves to ``C:\\Users\\<user>\\.claude-profiles\\<name>``).
         ``None`` means "use the claude default (``~/.claude``)".
-        Env vars ``AXIOM_CLAUDE_CONFIG_DIR`` (absolute path) and
-        ``AXIOM_CLAUDE_PROFILE`` (profile name) override this per
-        daemon instance. Env var ``AXIOM_CLAUDE_PROFILES`` (comma-list)
+        Env vars ``CLAUDE_FLEET_CONFIG_DIR`` (absolute path) and
+        ``CLAUDE_FLEET_PROFILE`` (profile name) override this per
+        daemon instance. Env var ``CLAUDE_FLEET_PROFILES`` (comma-list)
         cycles profiles round-robin per spawn.
     """
 
@@ -239,17 +241,16 @@ class WorkerBackend(OrchestratorBackend):
     ) -> None:
         self.repo_root = Path(repo_root)
         self.worktrees_root = Path(
-            worktrees_root or self.repo_root.parent / "Axiom-worktrees"
+            worktrees_root or self.repo_root.parent / "claude-fleet-worktrees"
         )
         self.env_overrides = dict(env_overrides or {})
         self.shutdown_grace_s = shutdown_grace_s
         self.claude_profile = claude_profile
-        # Profile round-robin: env AXIOM_CLAUDE_PROFILES="a,b,c" cycles
+        # Profile round-robin: env CLAUDE_FLEET_PROFILES="a,b,c" cycles
         # through the named profiles on each spawn. When unset, falls back
-        # to the single `claude_profile`. Hackathon use: spread parcel
-        # dispatch across 3 Max accounts to avoid hitting per-account rate
-        # limits from a single profile taking all traffic.
-        profiles_env = os.environ.get("AXIOM_CLAUDE_PROFILES", "").strip()
+        # to the single `claude_profile`. Useful for spreading parcel
+        # dispatch across multiple Max accounts to avoid per-account rate limits.
+        profiles_env = os.environ.get("CLAUDE_FLEET_PROFILES", "").strip()
         self._profile_ring: list[str] = (
             [p.strip() for p in profiles_env.split(",") if p.strip()]
             if profiles_env
@@ -275,8 +276,8 @@ class WorkerBackend(OrchestratorBackend):
            Health-aware (skips degraded / exhausted profiles) and sticky
            by default (better cache affinity on Anthropic's side than
            naive round-robin).
-        2. Round-robin across ``AXIOM_CLAUDE_PROFILES`` when set — legacy
-           fallback for hosts without claude-lb.
+        2. Round-robin across ``CLAUDE_FLEET_PROFILES`` when set — fallback
+           for hosts without claude-lb.
         3. The configured default (``self.claude_profile``).
         """
         picked = claude_lb.pick_profile(require_ok=True)
@@ -304,7 +305,8 @@ class WorkerBackend(OrchestratorBackend):
           child claude picks up the right ``.credentials.json``.
         - Strips any ``CLAUDE_CODE_OAUTH_TOKEN`` inherited from the daemon's
           own env; otherwise the env-var would override profile-based auth
-          inside claude CLI.
+          inside claude CLI. (See ``CLAUDE_FLEET_PROFILE`` / ``CLAUDE_FLEET_CONFIG_DIR``
+          for per-instance overrides.)
         - Injects ``GIT_CONFIG_COUNT + safe.directory=*`` so the in-process
           ``git worktree add`` inside :func:`ensure_worktree` works when
           the daemon runs as SYSTEM against a repo owned by an interactive
@@ -328,11 +330,14 @@ class WorkerBackend(OrchestratorBackend):
             # profile .credentials.json wins.
             env.pop("CLAUDE_CODE_OAUTH_TOKEN", None)
         _inject_git_safe_directory(env)
-        # Hard safety rail: parcels run on OAuth only (Max plan).
+        # Hard safety rail: parcels run on OAuth only (Claude Max plan). Using
+        # an API key instead would route sessions through a different billing
+        # context, bypass rate-limit pooling, and may violate per-account policy.
         if env.get("ANTHROPIC_API_KEY"):
             raise RuntimeError(
-                "ANTHROPIC_API_KEY is set; OAuth-only policy forbids this "
-                "(unset it before starting the daemon)"
+                "ANTHROPIC_API_KEY is set; OAuth-only policy forbids this. "
+                "Unset ANTHROPIC_API_KEY before starting the daemon — parcel "
+                "sessions authenticate via ~/.claude-profiles/<name>/.credentials.json."
             )
         return env
 

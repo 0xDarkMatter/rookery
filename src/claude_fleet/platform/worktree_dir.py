@@ -1,16 +1,16 @@
 """Resolve and create the parcel worktree directory on disk.
 
-Every ``axiom launch`` subcommand needs the same pair of operations:
+Every ``claude-fleet`` launch surface needs the same pair of operations:
 
 * :func:`resolve_worktree_dir` — map a parcel id to its expected on-disk
-  location (``<repo>/../Axiom-worktrees/<id>``), **without** creating it.
+  location (``<repo>/../claude-fleet-worktrees/<id>``), **without** creating it.
   Useful for previews / ``--dry-run``.
 * :func:`ensure_worktree` — resolve + create the git worktree if absent,
   reusing an existing one otherwise. Equivalent to the ``if [[ -d
   $WORKTREE ]]; then reuse; else git worktree add -b parcel/<id>; fi``
   branch the bash scripts share.
 
-Both helpers stay bench-agnostic and don't spawn claude; they only deal
+Both helpers stay domain-agnostic and don't spawn claude; they only deal
 with filesystem + git plumbing.
 """
 
@@ -20,7 +20,7 @@ import subprocess
 from dataclasses import dataclass
 from pathlib import Path
 
-WORKTREES_DIRNAME = "Axiom-worktrees"
+WORKTREES_DIRNAME = "claude-fleet-worktrees"
 
 
 @dataclass(frozen=True)
@@ -33,10 +33,9 @@ class RepoPaths:
 
 
 def repo_paths(repo_root: Path) -> RepoPaths:
-    """Return the canonical ``Axiom-worktrees`` layout rooted at *repo_root*.
+    """Return the canonical ``claude-fleet-worktrees`` layout rooted at *repo_root*.
 
-    The bash scripts build these with ``dirname``/``pwd -W``; here we lean
-    on ``Path`` which is cross-platform and doesn't need MSYS path rewrites.
+    Uses ``Path`` which is cross-platform and doesn't need MSYS path rewrites.
     """
     repo_root = Path(repo_root).resolve()
     worktrees_root = repo_root.parent / WORKTREES_DIRNAME
@@ -50,8 +49,8 @@ def repo_paths(repo_root: Path) -> RepoPaths:
 def resolve_worktree_dir(parcel_id: str, repo_root: Path) -> Path:
     """Return the expected on-disk path for *parcel_id* (not created).
 
-    Example: ``repo_root=/x/Forge/Axiom`` + ``parcel_id=P1`` →
-    ``/x/Forge/Axiom-worktrees/P1``.
+    Example: ``repo_root=/x/Forge/myrepo`` + ``parcel_id=P1`` →
+    ``/x/Forge/claude-fleet-worktrees/P1``.
     """
     return repo_paths(repo_root).worktrees_root / parcel_id
 

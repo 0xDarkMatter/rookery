@@ -2,35 +2,36 @@
 
 The orchestrator is the dispatcher that decides *what* parcel to launch
 and *when*. Actual worker spawning lives in
-:mod:`axiom.orchestrator.worker_backend`; landing (merge to main) lives
-in :mod:`axiom.orchestrator.land_backend`.
+:mod:`claude_fleet.orchestrator.worker_backend`; landing (merge to main)
+lives in :mod:`claude_fleet.orchestrator.land_backend`.
 
-Public surface (stable for downstream parcels)::
+Public surface (stable for downstream consumers)::
 
-    from axiom.orchestrator import Orchestrator, OrchestratorConfig
-    from axiom.orchestrator.backend import OrchestratorBackend, Job, WorkerHandle
-    from axiom.orchestrator.worker_backend import WorkerBackend
+    from claude_fleet.orchestrator import Orchestrator, OrchestratorConfig
+    from claude_fleet.orchestrator.backend import OrchestratorBackend, Job, WorkerHandle
+    from claude_fleet.orchestrator.worker_backend import WorkerBackend
 
-CLI (Typer) wired into :mod:`axiom.cli` as ``axiom queue ...``::
+CLI (Typer) — see :mod:`claude_fleet.cli` for the top-level ``claude-fleet``
+command::
 
-    axiom queue enqueue <parcel-id> [--prompt <path>] [--deps <id1,id2>] [--priority <N>]
-    axiom queue list [--status pending|claimed|done|failed|blocked|all]
-    axiom queue status <parcel-id>
-    axiom queue cancel <parcel-id>
-    axiom queue requeue <parcel-id>
-    axiom queue summary
-    axiom queue daemon-stop
-    axiom queue reclaim
+    claude-fleet enqueue <parcel-id> [--prompt <path>] [--deps <id1,id2>] [--priority <N>]
+    claude-fleet list [--status pending|claimed|done|failed|blocked|all]
+    claude-fleet status <parcel-id>
+    claude-fleet cancel <parcel-id>
+    claude-fleet requeue <parcel-id>
+    claude-fleet summary
+    claude-fleet daemon-stop
+    claude-fleet reclaim
 
-Daemon entry point:
+Daemon entry point::
 
-    axiomd start                      # canonical — dedicated console_script
-    axiom queue daemon-start          # legacy alias, same code path
+    claude-fleetd start                 # canonical — dedicated console_script
+    claude-fleet daemon-start           # alias, same code path
 """
 
 from __future__ import annotations
 
-from axiom.orchestrator.backend import (
+from claude_fleet.orchestrator.backend import (
     AuditReport,
     AuditVerdict,
     Job,
@@ -41,8 +42,8 @@ from axiom.orchestrator.backend import (
     OrchestratorBackend,
     WorkerHandle,
 )
-from axiom.orchestrator.config import OrchestratorConfig
-from axiom.orchestrator.orchestrator import (
+from claude_fleet.orchestrator.config import OrchestratorConfig
+from claude_fleet.orchestrator.orchestrator import (
     MAX_AUDIT_ITER,
     JobNotFound,
     Orchestrator,

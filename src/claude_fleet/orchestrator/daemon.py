@@ -25,17 +25,17 @@ from pathlib import Path
 
 import structlog
 
-from axiom.orchestrator.backend import (
+from claude_fleet.orchestrator.backend import (
     MergeBlockReason,
     OrchestratorBackend,
     WorkerHandle,
 )
-from axiom.orchestrator.land_backend import LandBackend
-from axiom.orchestrator.land_events import LandHandle
-from axiom.orchestrator.notifications import Notifier, NullNotifier
-from axiom.orchestrator.orchestrator import Orchestrator
-from axiom.orchestrator.retire import can_auto_retire
-from axiom.orchestrator.retire import retire as retire_worktree
+from claude_fleet.orchestrator.land_backend import LandBackend
+from claude_fleet.orchestrator.land_events import LandHandle
+from claude_fleet.orchestrator.notifications import Notifier, NullNotifier
+from claude_fleet.orchestrator.orchestrator import Orchestrator
+from claude_fleet.orchestrator.retire import can_auto_retire
+from claude_fleet.orchestrator.retire import retire as retire_worktree
 
 log = structlog.get_logger(__name__)
 
@@ -312,7 +312,7 @@ class Daemon:
         """Retire up to ``retire_batch_size`` landed-and-idle worktrees.
 
         Runs only when ``auto_retire`` is enabled. Each retirement runs
-        the full 6-gate check (see :mod:`axiom.orchestrator.retire`).
+        the full 6-gate check (see :mod:`claude_fleet.orchestrator.retire`).
         Gate failures are logged to the journal as
         ``worktree.retire_blocked`` with the specific reason; a
         successful retirement emits ``worktree.retired``.
