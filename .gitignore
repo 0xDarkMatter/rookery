@@ -50,3 +50,6 @@ BUILD_BLOCKED.md
 .claude/settings.local.json
 .claude/scheduled_tasks.lock
 .claude/worktrees/
+
+# Pytest tmp dirs (when --basetemp is used)
+.pytest-tmp/
