@@ -1,13 +1,15 @@
 """``claude-fleet init`` command.
 
 Scaffolds a new claude-fleet project in the current directory.
-
-TODO(P5 G6): implement full init logic.
 """
 
 from __future__ import annotations
 
+from pathlib import Path
+
 import typer
+
+from claude_fleet.init import InitError, cmd_init
 
 
 def init_cmd(
@@ -15,22 +17,23 @@ def init_cmd(
         False,
         "--force",
         "-f",
-        help="Overwrite existing files.",
+        help="Overwrite existing claude-fleet.yaml and re-run migrations.",
     ),
 ) -> None:
     """Scaffold a claude-fleet project in the current directory.
 
-    Creates: claude-fleet.yaml, claude-fleet.db (empty schema),
-    parcels/, worktrees/.gitignore.
-
-    TODO(P5 G6): implement full scaffolding logic.
+    Creates: claude-fleet.yaml, claude-fleet.db (with schema migrations),
+    parcels/, worktrees/.gitignore, and .gitignore entries.
     """
-    # TODO(P5 G6): implement — write claude-fleet.yaml, init DB, create dirs
+    try:
+        cmd_init(target_dir=Path("."), force=force)
+    except InitError as exc:
+        typer.echo(f"Error: {exc}", err=True)
+        raise typer.Exit(code=1) from exc
+
     typer.echo(
-        "TODO: init is not yet implemented. Implement in P5 (G6).",
-        err=True,
+        "Created claude-fleet.yaml, claude-fleet.db, parcels/, worktrees/.gitignore"
     )
-    raise typer.Exit(code=1)
 
 
 __all__ = ["init_cmd"]
