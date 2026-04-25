@@ -30,7 +30,7 @@ def test_parse_frontmatter_happy_path() -> None:
         "---\n"
         "id: W20-test\n"
         "owns:\n"
-        "  - src/axiom/orchestrator/scope.py\n"
+        "  - src/claude_fleet/orchestrator/scope.py\n"
         "reads:\n"
         "  - docs/PARCELS.md\n"
         "---\n"
@@ -39,7 +39,7 @@ def test_parse_frontmatter_happy_path() -> None:
     fm = parse_frontmatter(text)
     assert fm is not None
     assert fm["id"] == "W20-test"
-    assert fm["owns"] == ["src/axiom/orchestrator/scope.py"]
+    assert fm["owns"] == ["src/claude_fleet/orchestrator/scope.py"]
 
 
 def test_parse_frontmatter_missing_returns_none() -> None:
@@ -103,66 +103,66 @@ def test_load_claims_defaults_id_to_stem_when_missing(tmp_path: Path) -> None:
 
 def test_overlap_equal_paths() -> None:
     assert patterns_overlap(
-        "src/axiom/orchestrator/cli.py",
-        "src/axiom/orchestrator/cli.py",
+        "src/claude_fleet/orchestrator/cli.py",
+        "src/claude_fleet/orchestrator/cli.py",
     )
 
 
 def test_overlap_directory_prefix_vs_file() -> None:
     assert patterns_overlap(
-        "src/axiom/platform/",
-        "src/axiom/platform/config.py",
+        "src/claude_fleet/platform/",
+        "src/claude_fleet/platform/config.py",
     )
 
 
 def test_overlap_file_vs_directory_prefix_symmetric() -> None:
     # Symmetry: the order of operands must not matter for directory prefixes.
     assert patterns_overlap(
-        "src/axiom/platform/config.py",
-        "src/axiom/platform/",
+        "src/claude_fleet/platform/config.py",
+        "src/claude_fleet/platform/",
     )
 
 
 def test_overlap_glob_double_star_matches_literal() -> None:
     assert patterns_overlap(
-        "src/axiom/orchestrator/**",
-        "src/axiom/orchestrator/cli.py",
+        "src/claude_fleet/orchestrator/**",
+        "src/claude_fleet/orchestrator/cli.py",
     )
 
 
 def test_overlap_glob_single_star_matches_fname() -> None:
     assert patterns_overlap(
-        "src/axiom/orchestrator/*.py",
-        "src/axiom/orchestrator/cli.py",
+        "src/claude_fleet/orchestrator/*.py",
+        "src/claude_fleet/orchestrator/cli.py",
     )
 
 
 def test_overlap_glob_does_not_match_unrelated_subtree() -> None:
     assert not patterns_overlap(
-        "src/axiom/orchestrator/**",
-        "src/axiom/codex/retrieval.py",
+        "src/claude_fleet/orchestrator/**",
+        "src/claude_fleet/codex/retrieval.py",
     )
 
 
 def test_overlap_distinct_files() -> None:
     assert not patterns_overlap(
-        "src/axiom/orchestrator/cli.py",
-        "src/axiom/orchestrator/daemon.py",
+        "src/claude_fleet/orchestrator/cli.py",
+        "src/claude_fleet/orchestrator/daemon.py",
     )
 
 
 def test_overlap_both_globs_shared_stem() -> None:
-    # Both patterns root at src/axiom/orchestrator/; conservatively flag.
+    # Both patterns root at src/claude_fleet/orchestrator/; conservatively flag.
     assert patterns_overlap(
-        "src/axiom/orchestrator/**",
-        "src/axiom/orchestrator/*.py",
+        "src/claude_fleet/orchestrator/**",
+        "src/claude_fleet/orchestrator/*.py",
     )
 
 
 def test_overlap_both_globs_disjoint_stems() -> None:
     assert not patterns_overlap(
-        "src/axiom/orchestrator/**",
-        "src/axiom/codex/**",
+        "src/claude_fleet/orchestrator/**",
+        "src/claude_fleet/codex/**",
     )
 
 
@@ -183,8 +183,8 @@ def _c(**kwargs: object) -> ParcelClaims:
 
 
 def test_conflict_owns_vs_owns_is_hard() -> None:
-    a = _c(id="A", owns=["src/axiom/orchestrator/cli.py"])
-    b = _c(id="B", owns=["src/axiom/orchestrator/cli.py"])
+    a = _c(id="A", owns=["src/claude_fleet/orchestrator/cli.py"])
+    b = _c(id="B", owns=["src/claude_fleet/orchestrator/cli.py"])
     report = detect_conflicts(a, [b])
     assert report.has_hard
     assert report.has_any
@@ -194,8 +194,8 @@ def test_conflict_owns_vs_owns_is_hard() -> None:
 
 
 def test_conflict_owns_vs_modifies_is_warn() -> None:
-    a = _c(id="A", owns=["src/axiom/orchestrator/cli.py"])
-    b = _c(id="B", modifies=["src/axiom/orchestrator/cli.py"])
+    a = _c(id="A", owns=["src/claude_fleet/orchestrator/cli.py"])
+    b = _c(id="B", modifies=["src/claude_fleet/orchestrator/cli.py"])
     report = detect_conflicts(a, [b])
     assert report.has_any
     assert not report.has_hard
@@ -204,8 +204,8 @@ def test_conflict_owns_vs_modifies_is_warn() -> None:
 
 
 def test_conflict_modifies_vs_modifies_is_warn() -> None:
-    a = _c(id="A", modifies=["src/axiom/orchestrator/cli.py"])
-    b = _c(id="B", modifies=["src/axiom/orchestrator/cli.py"])
+    a = _c(id="A", modifies=["src/claude_fleet/orchestrator/cli.py"])
+    b = _c(id="B", modifies=["src/claude_fleet/orchestrator/cli.py"])
     report = detect_conflicts(a, [b])
     assert report.has_any
     assert not report.has_hard
@@ -214,16 +214,16 @@ def test_conflict_modifies_vs_modifies_is_warn() -> None:
 
 def test_conflict_reads_vs_reads_is_clean() -> None:
     # reads-vs-reads is informational — no conflict whatever the paths.
-    a = _c(id="A", reads=["src/axiom/orchestrator/cli.py"])
-    b = _c(id="B", reads=["src/axiom/orchestrator/cli.py"])
+    a = _c(id="A", reads=["src/claude_fleet/orchestrator/cli.py"])
+    b = _c(id="B", reads=["src/claude_fleet/orchestrator/cli.py"])
     report = detect_conflicts(a, [b])
     assert not report.has_any
 
 
 def test_conflict_owns_vs_reads_is_clean() -> None:
     # Reading someone else's owned file is explicitly allowed.
-    a = _c(id="A", owns=["src/axiom/orchestrator/cli.py"])
-    b = _c(id="B", reads=["src/axiom/orchestrator/cli.py"])
+    a = _c(id="A", owns=["src/claude_fleet/orchestrator/cli.py"])
+    b = _c(id="B", reads=["src/claude_fleet/orchestrator/cli.py"])
     report = detect_conflicts(a, [b])
     assert not report.has_any
 
@@ -246,13 +246,13 @@ def test_conflict_aggregates_multiple_parcels() -> None:
 
 
 def test_check_pair_glob_expansion() -> None:
-    a = _c(id="A", owns=["src/axiom/orchestrator/**"])
-    b = _c(id="B", owns=["src/axiom/orchestrator/cli.py"])
+    a = _c(id="A", owns=["src/claude_fleet/orchestrator/**"])
+    b = _c(id="B", owns=["src/claude_fleet/orchestrator/cli.py"])
     conflict = check_pair(a, b)
     assert conflict is not None
     assert conflict.has_hard
-    assert conflict.overlaps[0].our_pattern == "src/axiom/orchestrator/**"
-    assert conflict.overlaps[0].their_pattern == "src/axiom/orchestrator/cli.py"
+    assert conflict.overlaps[0].our_pattern == "src/claude_fleet/orchestrator/**"
+    assert conflict.overlaps[0].their_pattern == "src/claude_fleet/orchestrator/cli.py"
 
 
 def test_check_pair_returns_none_when_clean() -> None:
