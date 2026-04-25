@@ -62,18 +62,81 @@ def worktree_list_cmd(ctx: typer.Context) -> None:
 def worktree_retire_cmd(
     ctx: typer.Context,
     job_id: str = typer.Argument(..., help="Job id whose worktree to retire."),
+    worktree_base: Path = typer.Option(
+        Path("./worktrees"),
+        "--worktree-base",
+        help="Root directory holding per-job worktree subdirectories.",
+    ),
+    repo_root: Path | None = typer.Option(
+        None,
+        "--repo-root",
+        help=(
+            "Root of the git repository that owns the worktrees. "
+            "Defaults to the current working directory."
+        ),
+    ),
 ) -> None:
     """Manually retire (remove) a job's git worktree.
 
-    TODO(P6 G2): implement full worktree auto-retire logic.
+    The job must be in the ``landed`` state. Exits with code 7 on
+    worktree operation failure, code 1 on validation errors.
     """
-    # TODO(P6 G2): implement — call git worktree remove for this job's worktree
-    typer.echo(
-        f"TODO: worktree retire is not yet implemented (job_id: {job_id}). "
-        "Implement in P6 (G2).",
-        err=True,
+    import asyncio  # noqa: PLC0415
+
+    db_path = (
+        Path(ctx.obj["db"]) if ctx.obj and "db" in ctx.obj else Path("./claude-fleet.db")
     )
-    raise typer.Exit(code=1)
+
+    # Step 1: look up the job and validate it is landed.
+    try:
+        from claude_fleet.orchestrator.orchestrator import Orchestrator  # noqa: PLC0415
+        from claude_fleet.orchestrator.config import OrchestratorConfig  # noqa: PLC0415
+
+        cfg = OrchestratorConfig(db_path=db_path)
+        orch = Orchestrator(cfg.db_path, lease_ttl_s=cfg.lease_ttl_s)
+        try:
+            job = orch.status(job_id)
+        finally:
+            orch.close()
+    except Exception as exc:
+        typer.echo(f"error: could not query job {job_id!r}: {exc}", err=True)
+        raise typer.Exit(code=1) from None
+
+    if job.status != "landed":
+        typer.echo(
+            f"error: job {job_id!r} is not landed (status={job.status!r}). "
+            "Only landed jobs may be retired.",
+            err=True,
+        )
+        raise typer.Exit(code=1)
+
+    # Step 2: resolve the worktree path.
+    wt_path = worktree_base / job_id
+
+    # Step 3: call lifecycle retire.
+    try:
+        from claude_fleet.worktree import GitWorktreeLifecycle  # noqa: PLC0415
+
+        lifecycle = GitWorktreeLifecycle(
+            base_dir=worktree_base,
+            branch_prefix="parcel/",
+            base_branch="main",
+            repo_root=repo_root,
+        )
+
+        async def _run() -> None:
+            await lifecycle.retire(job, wt_path)
+
+        asyncio.run(_run())
+    except ValueError as exc:
+        # Non-landed status (belt-and-suspenders after the status check above).
+        typer.echo(f"error: {exc}", err=True)
+        raise typer.Exit(code=1) from None
+    except Exception as exc:
+        typer.echo(f"error: worktree retire failed for {job_id!r}: {exc}", err=True)
+        raise typer.Exit(code=7) from None
+
+    console.print(f"[green]retired[/green] worktree for job [bold]{job_id}[/bold]")
 
 
 @worktree_app.command("sweep")

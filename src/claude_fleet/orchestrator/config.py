@@ -77,6 +77,12 @@ class OrchestratorConfig(BaseModel):
     auto_retire_idle_minutes: int = 60
     auto_retire_batch_size: int = 1
 
+    # G2: when True (default), auto-retire only fires for jobs in the
+    # ``landed`` terminal state. Setting False would allow retiring other
+    # terminal states (failed, blocked) — kept disabled for safety; the
+    # daemon enforces this at the call site regardless of backend config.
+    retire_only_after_landed: bool = True
+
     # G1: worktree_base is the root directory that holds per-job worktree
     # sub-directories.  Defaults to ``./worktrees/`` relative to the CWD.
     worktree_base: Path = Field(default=Path("./worktrees"))

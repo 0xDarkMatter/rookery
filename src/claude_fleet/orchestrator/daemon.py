@@ -38,6 +38,7 @@ from claude_fleet.orchestrator.notifications import Notifier, NullNotifier
 from claude_fleet.orchestrator.orchestrator import Orchestrator
 from claude_fleet.orchestrator.retire import can_auto_retire
 from claude_fleet.orchestrator.retire import retire as retire_worktree
+from claude_fleet.worktree import WorktreeLifecycle
 
 log = structlog.get_logger(__name__)
 
@@ -100,6 +101,11 @@ class Daemon:
         retire_batch_size: int = 1,
         retire_main_branch: str = "main",
         default_verdict_adapter: str = "marker-file",
+        # G2: WorktreeLifecycle-based immediate retire on landed transition.
+        # Distinct from the W21 sweep (retire_worktrees_root path).
+        lifecycle: WorktreeLifecycle | None = None,
+        worktree_base: Path | None = None,
+        retire_only_after_landed: bool = True,
     ) -> None:
         self.orch = orch
         self.backend = backend
@@ -136,6 +142,25 @@ class Daemon:
         # override.  Resolved to an adapter instance via
         # _get_verdict_adapter_for_job() at harvest time.
         self._default_verdict_adapter = default_verdict_adapter
+
+        # G2: immediate lifecycle retire on the ``landed`` transition.
+        # Fires inside _harvest_land_handles() after mark_landed(), before the
+        # notifier. ``lifecycle`` is the WorktreeLifecycle that owns the
+        # worktrees; ``worktree_base`` is the root directory of per-job
+        # worktree subdirs (used to resolve the worktree path from job.id).
+        # ``retire_only_after_landed`` defaults True for safety — setting
+        # False would allow retiring on other terminal states, which is
+        # intentionally kept disabled.
+        self._lifecycle = lifecycle
+        self._worktree_base = worktree_base
+        self._retire_only_after_landed = retire_only_after_landed
+        # G2 auto-retire via lifecycle fires when BOTH auto_retire is True AND
+        # a lifecycle is supplied with a worktree_base.
+        self._lifecycle_auto_retire = (
+            auto_retire
+            and lifecycle is not None
+            and worktree_base is not None
+        )
 
     # --- main loop -----------------------------------------------------------
 
@@ -323,6 +348,14 @@ class Daemon:
             if result.outcome == "ok":
                 assert result.commit is not None
                 self.orch.mark_landed(job_id, result.commit)
+                # G2: immediate lifecycle retire on landed transition.
+                # Only when auto_retire=True, a lifecycle is wired, AND
+                # retire_only_after_landed=True (the safety default).
+                # The retire runs AFTER mark_landed so the DB is consistent.
+                # Failures are logged as warnings — they must not crash the
+                # daemon or prevent the notifier from firing.
+                if self._lifecycle_auto_retire and self._retire_only_after_landed:
+                    await self._try_lifecycle_retire(job_id)
             else:
                 reason = _outcome_to_reason(result.outcome)
                 self.orch.mark_merge_blocked(
@@ -332,6 +365,39 @@ class Daemon:
                     job_id, reason, detail=result.detail
                 )
             self._land_handles.pop(job_id, None)
+
+    async def _try_lifecycle_retire(self, job_id: str) -> None:
+        """Attempt G2 lifecycle retire for a freshly-landed job.
+
+        Failures are caught and logged as warnings. The daemon must not
+        crash and the notifier must always fire even if retire fails.
+        """
+        if self._lifecycle is None or self._worktree_base is None:
+            return
+        worktree = self._worktree_base / job_id
+        try:
+            job = self.orch.status(job_id)
+        except Exception as exc:
+            log.warning(
+                "orchestrator.daemon.lifecycle_retire_status_failed",
+                job_id=job_id,
+                err=str(exc),
+            )
+            return
+        try:
+            await self._lifecycle.retire(job, worktree)
+            log.info(
+                "orchestrator.daemon.lifecycle_retired",
+                job_id=job_id,
+                worktree=str(worktree),
+            )
+        except Exception as exc:
+            log.warning(
+                "orchestrator.daemon.lifecycle_retire_failed",
+                job_id=job_id,
+                worktree=str(worktree),
+                err=str(exc),
+            )
 
     # --- auto-retire branch --------------------------------------------------
 
@@ -543,6 +609,9 @@ async def run_daemon(
     retire_batch_size: int = 1,
     retire_main_branch: str = "main",
     default_verdict_adapter: str = "marker-file",
+    lifecycle: WorktreeLifecycle | None = None,
+    worktree_base: Path | None = None,
+    retire_only_after_landed: bool = True,
 ) -> None:
     """Top-level entrypoint. See :class:`Daemon` for behaviour."""
 
@@ -563,6 +632,9 @@ async def run_daemon(
         retire_batch_size=retire_batch_size,
         retire_main_branch=retire_main_branch,
         default_verdict_adapter=default_verdict_adapter,
+        lifecycle=lifecycle,
+        worktree_base=worktree_base,
+        retire_only_after_landed=retire_only_after_landed,
     )
     await daemon.run(stop_event)
 

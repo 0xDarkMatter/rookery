@@ -18,16 +18,30 @@ Design notes
   ``git worktree add`` again.
 * ``retire()`` raises :exc:`ValueError` for non-landed jobs to prevent
   accidental data loss; the caller must gate on ``job.status == "landed"``.
+* ``retire()`` raises :exc:`WorktreeRetireError` when the worktree has
+  uncommitted changes, so dirty-state is surfaced before any removal.
+* ``retire()`` retries ``git worktree remove`` up to 3 times with 1 s
+  back-off on Windows to survive transient file-lock races.
 * ``exists()`` is a lightweight stat check, not a git-porcelain call.
 """
 
 from __future__ import annotations
 
 import asyncio
+import subprocess
 from abc import ABC, abstractmethod
 from pathlib import Path
 
 from claude_fleet.orchestrator.backend import Job
+
+
+class WorktreeRetireError(RuntimeError):
+    """Raised when ``retire()`` refuses due to a safety gate.
+
+    Separate from plain :exc:`RuntimeError` so callers can distinguish
+    a deliberate refusal (dirty state, non-landed status) from an
+    unexpected git failure.
+    """
 
 
 class WorktreeLifecycle(ABC):
@@ -61,6 +75,34 @@ class WorktreeLifecycle(ABC):
     @abstractmethod
     async def exists(self, job: Job) -> Path | None:
         """Return the worktree path if it exists, ``None`` otherwise."""
+
+
+async def _git_status_porcelain(worktree: Path) -> str:
+    """Return ``git status --porcelain`` output for *worktree*.
+
+    Empty string means clean. A non-zero exit code is treated as "dirty"
+    (can't verify cleanliness) so the retire gate refuses rather than
+    silently proceeding past an unverifiable state.
+    """
+    try:
+        proc = await asyncio.create_subprocess_exec(
+            "git",
+            "-C",
+            str(worktree),
+            "status",
+            "--porcelain",
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+        )
+        stdout_bytes, stderr_bytes = await proc.communicate()
+        if proc.returncode != 0:
+            # Non-zero exit means git couldn't run status — treat as dirty.
+            stderr_text = stderr_bytes.decode("utf-8", errors="replace").strip()
+            return stderr_text or "<git status failed>"
+        return stdout_bytes.decode("utf-8", errors="replace")
+    except OSError as exc:
+        # git not on PATH or other OS error — treat as dirty.
+        return f"<git status error: {exc}>"
 
 
 async def _run_git(*args: str, cwd: Path | None = None) -> None:
@@ -166,20 +208,59 @@ class GitWorktreeLifecycle(WorktreeLifecycle):
     async def retire(self, job: Job, worktree: Path) -> None:
         """Remove *worktree* and delete the parcel branch.
 
+        Safety gates (in order):
+        1. ``job.status`` must be ``"landed"`` — raises :exc:`ValueError`
+           otherwise so callers can't accidentally retire in-flight jobs.
+        2. Worktree must be clean (``git status --porcelain`` empty) —
+           raises :exc:`WorktreeRetireError` if uncommitted changes are
+           present.
+        3. ``git worktree remove`` is retried up to 3 times with 1 s
+           back-off on Windows to survive transient file-lock races.
+           After exhausting retries the underlying :exc:`RuntimeError` is
+           re-raised.
+
         Raises
         ------
         ValueError
             When ``job.status != "landed"``.
+        WorktreeRetireError
+            When the worktree has uncommitted changes.
         RuntimeError
-            When ``git worktree remove`` or ``git branch -D`` fails.
+            When ``git worktree remove`` or ``git branch -D`` fails after
+            all retries.
         """
         if job.status != "landed":
             raise ValueError(
                 f"refusing to retire worktree for non-landed job {job.id!r} "
                 f"(status={job.status!r})"
             )
+
+        # Gate 2: refuse on dirty working tree before touching anything.
+        porcelain_out = await _git_status_porcelain(worktree)
+        if porcelain_out.strip():
+            raise WorktreeRetireError(
+                f"uncommitted changes in worktree {worktree!r} for job "
+                f"{job.id!r} — refusing to retire dirty worktree"
+            )
+
         cwd = self.repo_root or self.base_dir
-        await _run_git("worktree", "remove", str(worktree), cwd=cwd)
+
+        # Gate 3: retry ``git worktree remove`` to handle Windows file locks.
+        _RETRY_ATTEMPTS = 3
+        _RETRY_BACKOFF_S = 1.0
+        last_exc: Exception | None = None
+        for attempt in range(_RETRY_ATTEMPTS):
+            try:
+                await _run_git("worktree", "remove", str(worktree), cwd=cwd)
+                last_exc = None
+                break
+            except RuntimeError as exc:
+                last_exc = exc
+                if attempt < _RETRY_ATTEMPTS - 1:
+                    await asyncio.sleep(_RETRY_BACKOFF_S)
+        if last_exc is not None:
+            raise last_exc
+
         branch = f"{self.branch_prefix}{job.id}"
         await _run_git("branch", "-D", branch, cwd=cwd)
 
@@ -189,4 +270,4 @@ class GitWorktreeLifecycle(WorktreeLifecycle):
         return worktree.resolve() if worktree.exists() else None
 
 
-__all__ = ["GitWorktreeLifecycle", "WorktreeLifecycle"]
+__all__ = ["GitWorktreeLifecycle", "WorktreeLifecycle", "WorktreeRetireError"]
