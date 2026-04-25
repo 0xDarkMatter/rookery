@@ -1,0 +1,47 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# uv / venv
+.venv/
+.python-version
+uv.lock
+
+# Build
+build/
+dist/
+*.egg
+
+# Editor
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# claude-fleet runtime
+claude-fleet.db
+claude-fleet.db-wal
+claude-fleet.db-shm
+worktrees/
+*.log
+logs/
+
+# Secrets
+.env
+.env.*
+*credentials*
+
+# Build status files used by extraction harness
+BUILD_DONE.md
+BUILD_BLOCKED.md
