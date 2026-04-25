@@ -31,6 +31,7 @@ _EXPECTED_MIGRATIONS = [
     "0001_initial.sql",
     "0003_audit_integration.sql",
     "0004_auto_land.sql",
+    "0005_verdict_adapter.sql",
 ]
 
 
@@ -66,6 +67,8 @@ def test_apply_migrations_creates_tables_indexes_view(tmp_path: Path) -> None:
         assert "land_attempts" in jobs_cols
         assert "landed_commit" in jobs_cols
         assert "merge_block_reason" in jobs_cols
+        # G4: per-parcel verdict adapter override column (migration 0005).
+        assert "verdict_adapter" in jobs_cols
     finally:
         conn.close()
 

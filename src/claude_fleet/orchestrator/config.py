@@ -81,6 +81,11 @@ class OrchestratorConfig(BaseModel):
     # sub-directories.  Defaults to ``./worktrees/`` relative to the CWD.
     worktree_base: Path = Field(default=Path("./worktrees"))
 
+    # G4: which verdict adapter to use when harvesting worker completions.
+    # Registered built-ins: marker-file | exit-code | json-result.
+    # Override per-parcel via frontmatter ``verdict_adapter:`` key.
+    verdict_adapter: str = "marker-file"
+
     # R2-5 audit-loop knobs (absorbs scripts/auto-feedback-loop.sh).
     audit_loop: AuditLoopConfig = Field(default_factory=AuditLoopConfig)
 

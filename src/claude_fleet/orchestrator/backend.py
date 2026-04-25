@@ -76,6 +76,7 @@ class Job(BaseModel):
     land_attempts: int = 0
     landed_commit: str | None = None
     merge_block_reason: MergeBlockReason | None = None
+    verdict_adapter: str | None = None
 
 
 class AuditReport(BaseModel):

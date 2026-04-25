@@ -90,6 +90,7 @@ _JOB_COLUMNS = (
     "land_attempts",
     "landed_commit",
     "merge_block_reason",
+    "verdict_adapter",
 )
 
 
@@ -135,6 +136,9 @@ def _row_to_job(row: sqlite3.Row) -> Job:
         reason_raw if reason_raw in _VALID_MERGE_BLOCK_REASONS else None
     )
 
+    # verdict_adapter is NULL for jobs created before migration 0005.
+    verdict_adapter_raw = row["verdict_adapter"]
+
     return Job(
         id=row["id"],
         prompt_path=row["prompt_path"],
@@ -160,6 +164,7 @@ def _row_to_job(row: sqlite3.Row) -> Job:
         land_attempts=row["land_attempts"],
         landed_commit=row["landed_commit"],
         merge_block_reason=reason,
+        verdict_adapter=verdict_adapter_raw if isinstance(verdict_adapter_raw, str) else None,
     )
 
 
@@ -258,6 +263,7 @@ class Orchestrator:
         notes: str = "",
         verification_enabled: bool = True,
         parent_job_id: str | None = None,
+        verdict_adapter: str | None = None,
     ) -> Job:
         """Insert a new job. Raises sqlite3.IntegrityError on duplicate id.
 
@@ -265,6 +271,11 @@ class Orchestrator:
         → audit → fix state machine. Callers that want the legacy
         ``running → done`` path (e.g. runtime trial dispatches) should pass
         ``verification_enabled=False``.
+
+        ``verdict_adapter`` is the per-parcel override for the verdict adapter
+        (G4). When ``None``, the global config default (``marker-file``) is
+        used at harvest time. Set from parcel frontmatter ``verdict_adapter:``
+        key.
         """
 
         deps_list = list(deps or [])
@@ -272,8 +283,9 @@ class Orchestrator:
             self._conn.execute(
                 "INSERT INTO jobs "
                 "(id, prompt_path, deps_json, priority, max_attempts, "
-                "created_by, notes, verification_enabled, parent_job_id) "
-                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                "created_by, notes, verification_enabled, parent_job_id, "
+                "verdict_adapter) "
+                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
                 (
                     job_id,
                     prompt_path,
@@ -284,6 +296,7 @@ class Orchestrator:
                     notes or None,
                     1 if verification_enabled else 0,
                     parent_job_id,
+                    verdict_adapter,
                 ),
             )
             self._log_event(
@@ -295,6 +308,7 @@ class Orchestrator:
                     "priority": priority,
                     "verification_enabled": verification_enabled,
                     "parent_job_id": parent_job_id,
+                    "verdict_adapter": verdict_adapter,
                 },
             )
         self._emit(

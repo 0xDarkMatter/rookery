@@ -25,6 +25,8 @@ from pathlib import Path
 
 import structlog
 
+from claude_fleet.adapters.base import VerdictAdapter
+from claude_fleet.adapters.registry import UnknownVerdictAdapter, get_verdict_adapter
 from claude_fleet.orchestrator.backend import (
     MergeBlockReason,
     OrchestratorBackend,
@@ -97,6 +99,7 @@ class Daemon:
         retire_idle_minutes: int = 60,
         retire_batch_size: int = 1,
         retire_main_branch: str = "main",
+        default_verdict_adapter: str = "marker-file",
     ) -> None:
         self.orch = orch
         self.backend = backend
@@ -129,6 +132,10 @@ class Daemon:
         self._retire_idle_seconds = retire_idle_minutes * 60
         self._retire_batch_size = max(1, retire_batch_size)
         self._retire_main_branch = retire_main_branch
+        # G4: default verdict adapter name used when a job has no per-parcel
+        # override.  Resolved to an adapter instance via
+        # _get_verdict_adapter_for_job() at harvest time.
+        self._default_verdict_adapter = default_verdict_adapter
 
     # --- main loop -----------------------------------------------------------
 
@@ -173,6 +180,25 @@ class Daemon:
         await self._fill_slots()
         self._maybe_emit_summary()
 
+    def _get_verdict_adapter_for_job(self, job_id: str) -> VerdictAdapter:
+        """Return the effective :class:`VerdictAdapter` for *job_id* (G4).
+
+        Preference order (per-parcel override):
+        1. ``jobs.verdict_adapter`` column (set from parcel frontmatter).
+        2. ``self._default_verdict_adapter`` (from OrchestratorConfig).
+
+        Raises:
+            UnknownVerdictAdapter: if the resolved name is not registered.
+        """
+        adapter_name = self._default_verdict_adapter
+        try:
+            job = self.orch.status(job_id)
+            if job.verdict_adapter:
+                adapter_name = job.verdict_adapter
+        except Exception:  # noqa: BLE001
+            pass
+        return get_verdict_adapter(adapter_name)
+
     async def _harvest_running(self) -> None:
         """Per spec §5: liveness first, then harvest, then heartbeat.
 
@@ -184,9 +210,10 @@ class Daemon:
           message; the orchestrator decides between pending-retry and
           terminal-block based on attempts vs max_attempts.
 
-        Completion signal is ``PARCEL_DONE-<job_id>.md`` at the worktree
-        root (per-parcel unique). Legacy ``PARCEL_DONE.md`` also accepted
-        for backward compatibility. See ``worker_backend.harvest``.
+        Completion signal is determined by the job's verdict adapter (G4).
+        The default adapter reads ``PARCEL_DONE-<job_id>.md`` at the
+        worktree root. Legacy ``PARCEL_DONE.md`` is also accepted for
+        backward compatibility. See ``worker_backend.harvest``.
         """
 
         for job_id in list(self._handles):
@@ -515,6 +542,7 @@ async def run_daemon(
     retire_idle_minutes: int = 60,
     retire_batch_size: int = 1,
     retire_main_branch: str = "main",
+    default_verdict_adapter: str = "marker-file",
 ) -> None:
     """Top-level entrypoint. See :class:`Daemon` for behaviour."""
 
@@ -534,6 +562,7 @@ async def run_daemon(
         retire_idle_minutes=retire_idle_minutes,
         retire_batch_size=retire_batch_size,
         retire_main_branch=retire_main_branch,
+        default_verdict_adapter=default_verdict_adapter,
     )
     await daemon.run(stop_event)
 
