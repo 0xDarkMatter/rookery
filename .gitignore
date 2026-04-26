@@ -53,3 +53,4 @@ BUILD_BLOCKED.md
 
 # Pytest tmp dirs (when --basetemp is used)
 .pytest-tmp/
+.coverage

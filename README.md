@@ -21,6 +21,13 @@ pending      0
 
 That's the whole shape. Throw markdown parcels at it, walk away, come back to merged commits.
 
+## Recent Updates
+
+**v0.1.0** (April 2026)
+- 🚀 **Initial extraction** - Lifted ~7,500 LOC from `axiom`'s orchestrator by a single headless `claude -p` session running unattended against six pages of spec docs. The build itself was a DSP wave — phases P0–P8 as sub-parcels coordinated by the very state machine the codebase now exposes as a library. 204 tests green on first run. MIT, Python 3.12+, cross-platform (Linux, macOS, Windows).
+
+[View full changelog →](https://github.com/0xDarkMatter/claude-fleet/commits/main)
+
 ## Why this exists
 
 Every other parallel-Claude tool today is one of three shapes:

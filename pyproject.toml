@@ -51,9 +51,9 @@ claude-fleet = "claude_fleet.cli.main:cli_main"
 claude-fleetd = "claude_fleet.orchestrator.__main__:main"
 
 [project.urls]
-Homepage = "https://github.com/macknevill/claude-fleet"
-Repository = "https://github.com/macknevill/claude-fleet"
-Issues = "https://github.com/macknevill/claude-fleet/issues"
+Homepage = "https://github.com/0xDarkMatter/claude-fleet"
+Repository = "https://github.com/0xDarkMatter/claude-fleet"
+Issues = "https://github.com/0xDarkMatter/claude-fleet/issues"
 
 [build-system]
 requires = ["hatchling"]
