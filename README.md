@@ -1,10 +1,12 @@
-# claude-fleet
+# rookery
 
-![claude-fleet](docs/assets/hackathon.gif)
+![rookery](docs/assets/hackathon.gif)
 
 **Built for the Claude Opus 4.7 Hackathon.**
 
 [![Hackathon](https://img.shields.io/badge/Claude%20Opus%204.7-Hackathon-blueviolet?logo=anthropic)](https://www.anthropic.com/)
+
+_Formerly known as `claude-fleet` (renamed 2026-04-27). The Python package and CLI binaries still ship as `claude-fleet` — install instructions and command examples below reflect that._
 
 **A job system for headless agent sessions.** Run dozens of unattended `claude -p` workers in parallel, each in its own git worktree, with dependency resolution, lease-based crash recovery, and optional auto-land on PASS verdicts. One worker per parcel, one parcel per worktree, one daemon per project.
 
