@@ -1,5 +1,11 @@
 # claude-fleet
 
+![claude-fleet](docs/assets/hackathon.gif)
+
+**Built for the Claude Opus 4.7 Hackathon.**
+
+[![Hackathon](https://img.shields.io/badge/Claude%20Opus%204.7-Hackathon-blueviolet?logo=anthropic)](https://www.anthropic.com/)
+
 **A job system for headless agent sessions.** Run dozens of unattended `claude -p` workers in parallel, each in its own git worktree, with dependency resolution, lease-based crash recovery, and optional auto-land on PASS verdicts. One worker per parcel, one parcel per worktree, one daemon per project.
 
 > _We dogfooded the primitive to build the primitive._ This repo was extracted from `axiom`'s orchestrator by a single headless `claude -p` session — itself a parallel parcel run coordinated by the very state machine it was building. The commit history is the proof; jump to [Receipts](#receipts).
