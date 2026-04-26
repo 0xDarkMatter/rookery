@@ -32,4 +32,4 @@ Initial extraction from the Axiom benchmarking application as a standalone, reus
 - **`ANTHROPIC_API_KEY` ban**: the daemon refuses to start when `ANTHROPIC_API_KEY` is set in the environment. claude-fleet is OAuth-only — running with a billed API key would silently spend money on every spawned worker. Unset the variable before starting `claude-fleetd`.
 - **Known issue (Windows test ordering)**: a single asyncio subprocess test in `tests/unit/orchestrator/test_orchestrator.py` can emit a `RuntimeError: Event loop is closed` warning when test ordering is non-deterministic. The assertion still passes; the warning is a Windows ProactorEventLoop teardown artifact and does not affect runtime behaviour.
 
-[0.1.0]: https://github.com/macknevill/claude-fleet/releases/tag/v0.1.0
+[0.1.0]: https://github.com/0xDarkMatter/claude-fleet/releases/tag/v0.1.0

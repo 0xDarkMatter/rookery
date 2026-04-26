@@ -84,7 +84,7 @@ Five-minute walkthrough: [docs/QUICKSTART.md](docs/QUICKSTART.md).
 
 ## Adapting to an existing repo
 
-`claude-fleet` is happiest in greenfield projects, but it works fine alongside an existing codebase. We extracted it *from* a 100K-LOC project (`axiom`) that has been running this exact pattern for months. The retrofit recipe:
+`claude-fleet` is happiest in greenfield projects, but it works fine alongside an existing codebase. We extracted it *from* `axiom`, a sibling project that uses this same orchestrator pattern internally. The retrofit recipe:
 
 1. **`claude-fleet init`** in the repo root — it only writes new files (`claude-fleet.yaml`, `claude-fleet.db`, `parcels/`, `worktrees/.gitignore`). Adds five lines to `.gitignore`. Touches nothing else.
 2. **Pick narrow first targets.** Good first parcels: dependency upgrades, lint cleanups, test scaffolding for a leaf module, codemods. Bad first parcels: anything that touches the build system, anything with cross-cutting refactors, anything where the contract between agents isn't already locked down.
@@ -94,7 +94,7 @@ Five-minute walkthrough: [docs/QUICKSTART.md](docs/QUICKSTART.md).
 
 Specific gotchas at scale:
 
-- Worktree creation on a 100K-LOC repo with submodules is ~15 seconds — tune `lease_seconds` accordingly (default 1800s is fine).
+- Worktree creation on a large repo with submodules can take ~15 seconds — tune `lease_seconds` accordingly (default 1800s is generous).
 - If your test suite is slow (>5 min), set `auto_land_test_cmd` to a scoped command, not the full suite. The land flow runs it twice (after rebase, before fast-forward).
 - Windows + git worktrees: works, but NTFS junctions occasionally lock on `worktree remove`. We retry with backoff; if you see `worktree.WorktreeLockError`, that's it.
 
@@ -228,7 +228,7 @@ That's a real DSP run, with real verdicts, against the very pattern the codebase
 
 - **204 unit + integration tests** lifted from axiom, all green on first run
 - **~7,500 LOC** in `src/claude_fleet/`
-- **In production at ~100K LOC scale** — `axiom` has been running this exact pattern for months
+- **Extracted from sibling project `axiom`** — same orchestrator pattern used internally
 - **MIT licensed**, Python 3.12+
 - **Cross-platform** — Linux, macOS, Windows (including the NTFS worktree quirks)
 

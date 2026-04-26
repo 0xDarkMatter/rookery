@@ -97,4 +97,4 @@ The container needs persistent storage for `claude-fleet.db`, `worktrees/`, and 
 - **Graceful shutdown**: SIGTERM finishes the current tick, signals workers, waits up to `shutdown_grace_s` (default 30s), then flips in-flight jobs back to `pending` so the next start picks them up.
 - **Lease reclaim**: stale leases auto-recover on the next tick; `claude-fleet reclaim` forces a sweep.
 - **Health**: `claude-fleet daemon-status` tails the pidfile + db heartbeat.
-- **Failure modes + recovery**: see the table at the bottom of [BUILD_PLAN](https://github.com/macknevill/claude-fleet/blob/main/docs/BUILD_PLAN.md) (Windows worktree quirks, lease expiry, locked-file teardown, etc.).
+- **Failure modes + recovery**: see the table at the bottom of [BUILD_PLAN](https://github.com/0xDarkMatter/claude-fleet/blob/main/docs/BUILD_PLAN.md) (Windows worktree quirks, lease expiry, locked-file teardown, etc.).
