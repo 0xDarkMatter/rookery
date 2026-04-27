@@ -23,14 +23,16 @@ from claude_fleet.orchestrator.config import OrchestratorConfig, load_config
 
 
 def test_load_config_worktrees_root_canonical(tmp_path: Path) -> None:
-    """load_config() with worktrees_root: ./custom-trees sets the field."""
+    """load_config() with worktrees_root: ./custom-trees resolves to absolute path."""
     yaml_text = "worktrees_root: ./custom-trees\n"
     cfg_file = tmp_path / "claude-fleet.yaml"
     cfg_file.write_text(yaml_text, encoding="utf-8")
 
     cfg = load_config(cfg_file)
 
-    assert cfg.worktrees_root == Path("./custom-trees")
+    # Relative paths are resolved at load time relative to the config file's
+    # directory, not the daemon CWD.
+    assert cfg.worktrees_root == tmp_path / "custom-trees"
 
 
 # ---------------------------------------------------------------------------
@@ -48,8 +50,8 @@ def test_load_config_worktree_base_alias_accepted(tmp_path: Path) -> None:
         warnings.simplefilter("always")
         cfg = load_config(cfg_file)
 
-    assert cfg.worktrees_root == Path("./legacy-trees"), (
-        "worktree_base should be mapped to worktrees_root"
+    assert cfg.worktrees_root == cfg_file.parent.resolve() / "legacy-trees", (
+        "worktree_base should be mapped to worktrees_root and resolved to absolute"
     )
 
     deprecation_warnings = [
@@ -84,7 +86,7 @@ def test_load_config_both_fields_canonical_wins(tmp_path: Path) -> None:
         warnings.simplefilter("always")
         cfg = load_config(cfg_file)
 
-    assert cfg.worktrees_root == Path("./canonical")
+    assert cfg.worktrees_root == cfg_file.parent.resolve() / "canonical"
     deprecation_warnings = [
         w for w in caught if issubclass(w.category, DeprecationWarning)
     ]

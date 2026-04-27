@@ -99,6 +99,7 @@ def start_cmd(
     from claude_fleet.orchestrator.orchestrator import Orchestrator  # noqa: PLC0415
     from claude_fleet.orchestrator.worker_backend import WorkerBackend  # noqa: PLC0415
     from claude_fleet.orchestrator.land_backend import LandBackend  # noqa: PLC0415
+    from claude_fleet.worktree import GitWorktreeLifecycle  # noqa: PLC0415
     from rich.console import Console  # noqa: PLC0415
 
     console = Console()
@@ -124,11 +125,16 @@ def start_cmd(
     worktrees_root = cfg.worktrees_root or repo_root / "worktrees"
 
     orch = Orchestrator(cfg.db_path, lease_ttl_s=cfg.lease_ttl_s)
+    worktree_lifecycle = GitWorktreeLifecycle(
+        base_dir=worktrees_root,
+        repo_root=repo_root,
+    )
     backend = WorkerBackend(
         repo_root=repo_root,
         worktrees_root=worktrees_root,
         shutdown_grace_s=cfg.shutdown_grace_s,
         claude_profile=cfg.claude_profile,
+        worktree_lifecycle=worktree_lifecycle,
     )
 
     land_backend: LandBackend | None = None

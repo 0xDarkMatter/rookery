@@ -127,6 +127,14 @@ class OrchestratorConfig(BaseModel):
     # Override per-parcel via frontmatter ``verdict_adapter:`` key.
     verdict_adapter: str = "marker-file"
 
+    # Auto-commit on PASS: when True (default), the daemon stages and commits
+    # any unstaged work in the parcel worktree immediately after a PASS /
+    # PASS_WITH_WARNINGS verdict is harvested.  This ensures the parcel branch
+    # HEAD advances so ``auto_land`` (and manual ``git merge``) have something
+    # to fast-forward.  Set to False to preserve legacy behaviour where the
+    # worker is solely responsible for committing its own output.
+    auto_commit_on_pass: bool = True
+
     # G5: claude-lb integration — health-aware profile selection.
     # Disabled by default; set claude_lb.enabled=true to activate.
     claude_lb: ClaudeLbConfig = Field(default_factory=ClaudeLbConfig)
@@ -160,6 +168,7 @@ def load_config(path: Path | None = None) -> "OrchestratorConfig":
     except ImportError:
         return OrchestratorConfig()
 
+    config_dir = Path(path).resolve().parent
     raw = Path(path).read_text(encoding="utf-8")
     data: Any = yaml.safe_load(raw)
     if not isinstance(data, dict):
@@ -177,6 +186,16 @@ def load_config(path: Path | None = None) -> "OrchestratorConfig":
     elif "worktree_base" in data:
         # Both present: canonical wins, silently drop alias.
         data.pop("worktree_base")
+
+    # Resolve worktrees_root relative paths at load time so that a yaml with
+    # ``worktrees_root: ./worktrees`` is anchored to the config file's directory,
+    # not the daemon's CWD (which may differ when the daemon is started from a
+    # different working directory by pm2 / systemd).
+    raw_wt_root = data.get("worktrees_root")
+    if raw_wt_root is not None:
+        wt_path = Path(str(raw_wt_root))
+        if not wt_path.is_absolute():
+            data["worktrees_root"] = str(config_dir / wt_path)
 
     known = set(OrchestratorConfig.model_fields)
     filtered = {k: v for k, v in data.items() if k in known}

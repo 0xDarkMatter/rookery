@@ -19,6 +19,8 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
+import re
+import subprocess
 import sys
 from collections.abc import Callable
 from pathlib import Path
@@ -106,6 +108,7 @@ class Daemon:
         lifecycle: WorktreeLifecycle | None = None,
         worktree_base: Path | None = None,
         retire_only_after_landed: bool = True,
+        auto_commit_on_pass: bool = True,
     ) -> None:
         self.orch = orch
         self.backend = backend
@@ -161,6 +164,10 @@ class Daemon:
             and lifecycle is not None
             and worktree_base is not None
         )
+        # Auto-commit on PASS: when enabled, the daemon stages and commits any
+        # unstaged changes in the parcel worktree after a PASS / PASS_WITH_WARNINGS
+        # verdict is harvested.  Opt-out via OrchestratorConfig.auto_commit_on_pass.
+        self._auto_commit_on_pass = auto_commit_on_pass
 
     # --- main loop -----------------------------------------------------------
 
@@ -204,6 +211,111 @@ class Daemon:
             self._harvest_retire()
         await self._fill_slots()
         self._maybe_emit_summary()
+
+    # --- auto-commit on PASS -------------------------------------------------
+
+    @staticmethod
+    def _extract_verdict_from_result(result: dict[str, object]) -> str:
+        """Return the verdict string embedded in *result*, or ``'UNKNOWN'``.
+
+        The marker-file adapter embeds the raw parcel-done markdown as
+        ``result["parcel_done_md"]``.  We scan for the first ``Verdict:`` line
+        (same patterns as :mod:`claude_fleet.orchestrator.verdict_parser`) so
+        the auto-commit gate fires on PASS / PASS_WITH_WARNINGS without
+        importing the full parser (which raises on missing verdict).
+        """
+        md = result.get("parcel_done_md")
+        if not isinstance(md, str) or not md:
+            return "UNKNOWN"
+        _verdict_re = re.compile(
+            r"^\s*\**\s*verdict\s*:\s*(?:\**\s*)*([A-Za-z_]+)",
+            re.IGNORECASE | re.MULTILINE,
+        )
+        m = _verdict_re.search(md)
+        if not m:
+            return "UNKNOWN"
+        token = m.group(1).upper().rstrip("*")
+        if token == "PASS_WITH_WARNING":
+            token = "PASS_WITH_WARNINGS"
+        return token
+
+    @staticmethod
+    def _extract_subject_from_result(result: dict[str, object], job_id: str) -> str:
+        """Derive a short commit subject from the parcel-done markdown.
+
+        Looks for the first non-empty line under a ``## Summary`` heading.
+        Falls back to the generic ``autonomous build by claude-fleet`` message.
+        """
+        md = result.get("parcel_done_md")
+        if isinstance(md, str) and md:
+            _summary_re = re.compile(
+                r"^##\s+summary\s*$(.+?)^(?:#|\Z)",
+                re.IGNORECASE | re.MULTILINE | re.DOTALL,
+            )
+            m = _summary_re.search(md)
+            if m:
+                for line in m.group(1).splitlines():
+                    stripped = line.strip().lstrip("-* \t")
+                    if stripped:
+                        # Truncate to 72 chars so the subject line stays sane.
+                        return stripped[:72]
+        return "autonomous build by claude-fleet"
+
+    async def _maybe_auto_commit(
+        self,
+        job_id: str,
+        worktree: Path,
+        result: dict[str, object],
+    ) -> None:
+        """Stage and commit any unstaged work in *worktree* after a PASS verdict.
+
+        Steps:
+        1. Extract verdict from *result*; return early if not PASS / PASS_WITH_WARNINGS.
+        2. ``git add -A`` — stage everything not gitignored.
+        3. ``git diff --cached --quiet`` — if nothing staged, worker committed
+           themselves; skip to avoid a duplicate empty commit.
+        4. Commit with a subject derived from the parcel-done ``## Summary``.
+
+        On any git failure the error is logged to ``job.last_error`` and
+        surfaced in the daemon log, but the verdict transition is NOT blocked.
+        """
+        if not self._auto_commit_on_pass:
+            return
+
+        verdict = self._extract_verdict_from_result(result)
+        if verdict not in ("PASS", "PASS_WITH_WARNINGS"):
+            return
+
+        subject = self._extract_subject_from_result(result, job_id)
+        commit_msg = f"feat({job_id}): {subject}"
+
+        try:
+            await asyncio.to_thread(
+                _run_git_auto_commit, worktree, commit_msg, job_id
+            )
+        except _AutoCommitError as exc:
+            # Record on job but do NOT re-raise — verdict transition must proceed.
+            log.warning(
+                "orchestrator.daemon.auto_commit_failed",
+                job_id=job_id,
+                worktree=str(worktree),
+                err=str(exc),
+            )
+            try:
+                with self.orch._conn_lock:  # noqa: SLF001
+                    self.orch._conn.execute(  # noqa: SLF001
+                        "UPDATE jobs SET last_error=? WHERE id=?",
+                        (f"auto-commit failed: {exc}", job_id),
+                    )
+            except Exception:
+                log.exception(
+                    "orchestrator.daemon.auto_commit_error_record_failed",
+                    job_id=job_id,
+                )
+        except Exception:
+            _safe_log_exception(
+                "orchestrator.daemon.auto_commit_unexpected_error", job_id=job_id
+            )
 
     def _get_verdict_adapter_for_job(self, job_id: str) -> VerdictAdapter:
         """Return the effective :class:`VerdictAdapter` for *job_id* (G4).
@@ -265,6 +377,10 @@ class Daemon:
             if result is not None:
                 status = result.get("status", "done")
                 if status == "done":
+                    # Auto-commit any unstaged work on the parcel branch before
+                    # transitioning to done.  Fires only on PASS / PASS_WITH_WARNINGS
+                    # verdicts; no-ops on clean worktrees (worker committed already).
+                    await self._maybe_auto_commit(job_id, handle.worktree, result)
                     self.orch.mark_done(job_id, result, worker_id=handle.worker_id)
                 else:
                     err = str(result.get("error") or "worker reported failure")
@@ -607,6 +723,69 @@ class Daemon:
         self._land_handles.clear()
 
 
+class _AutoCommitError(RuntimeError):
+    """Raised by :func:`_run_git_auto_commit` when a git step fails."""
+
+
+def _run_git_auto_commit(worktree: Path, commit_msg: str, job_id: str) -> None:
+    """Stage all changes and commit them in *worktree* (sync, runs in a thread).
+
+    Steps:
+    1. ``git -C <worktree> add -A`` — stage everything not gitignored.
+    2. ``git -C <worktree> diff --cached --quiet`` — if exit 0, nothing to
+       commit (worker self-committed); return without creating an empty commit.
+    3. ``git -C <worktree> commit -m <msg>`` — record the parcel work.
+
+    Raises:
+        _AutoCommitError: if ``git add`` or ``git commit`` exits non-zero.
+    """
+    wt = str(worktree)
+
+    # Step 1: stage everything.
+    add_result = subprocess.run(
+        ["git", "-C", wt, "add", "-A"],
+        capture_output=True,
+        text=True,
+    )
+    if add_result.returncode != 0:
+        raise _AutoCommitError(
+            f"git add -A failed (exit {add_result.returncode}): "
+            f"{add_result.stderr.strip()}"
+        )
+
+    # Step 2: check for staged changes.
+    diff_result = subprocess.run(
+        ["git", "-C", wt, "diff", "--cached", "--quiet"],
+        capture_output=True,
+    )
+    if diff_result.returncode == 0:
+        # Nothing staged — worker committed themselves already; nothing to do.
+        log.debug(
+            "orchestrator.daemon.auto_commit_skip_clean",
+            job_id=job_id,
+            worktree=wt,
+        )
+        return
+
+    # Step 3: commit.
+    commit_result = subprocess.run(
+        ["git", "-C", wt, "commit", "-m", commit_msg],
+        capture_output=True,
+        text=True,
+    )
+    if commit_result.returncode != 0:
+        raise _AutoCommitError(
+            f"git commit failed (exit {commit_result.returncode}): "
+            f"{commit_result.stderr.strip()}"
+        )
+    log.info(
+        "orchestrator.daemon.auto_committed",
+        job_id=job_id,
+        worktree=wt,
+        subject=commit_msg,
+    )
+
+
 def _outcome_to_reason(outcome: str) -> MergeBlockReason:
     """Map :class:`LandResult`.outcome to a ``merge_block_reason`` enum value.
 
@@ -646,6 +825,7 @@ async def run_daemon(
     lifecycle: WorktreeLifecycle | None = None,
     worktree_base: Path | None = None,
     retire_only_after_landed: bool = True,
+    auto_commit_on_pass: bool = True,
 ) -> None:
     """Top-level entrypoint. See :class:`Daemon` for behaviour."""
 
@@ -669,6 +849,7 @@ async def run_daemon(
         lifecycle=lifecycle,
         worktree_base=worktree_base,
         retire_only_after_landed=retire_only_after_landed,
+        auto_commit_on_pass=auto_commit_on_pass,
     )
     await daemon.run(stop_event)
 
