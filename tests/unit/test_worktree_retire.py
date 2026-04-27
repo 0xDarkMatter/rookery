@@ -24,8 +24,8 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 from typer.testing import CliRunner
 
-from claude_fleet.orchestrator.backend import Job
-from claude_fleet.worktree import GitWorktreeLifecycle, WorktreeRetireError
+from rookery.orchestrator.backend import Job
+from rookery.worktree import GitWorktreeLifecycle, WorktreeRetireError
 
 
 # ---------------------------------------------------------------------------
@@ -165,7 +165,7 @@ async def test_retire_retries_on_file_lock(
     call_count = 0
     original_run_git = lifecycle.__class__.__bases__[0]  # just for reference
 
-    import claude_fleet.worktree as wt_mod  # noqa: PLC0415
+    import rookery.worktree as wt_mod  # noqa: PLC0415
 
     real_run_git = wt_mod._run_git
     attempts: list[int] = []
@@ -208,7 +208,7 @@ async def test_retire_raises_after_all_retries_exhausted(
     job_create = _make_job("g2-exhaust-001")
     worktree = await lifecycle.create(job_create)
 
-    import claude_fleet.worktree as wt_mod  # noqa: PLC0415
+    import rookery.worktree as wt_mod  # noqa: PLC0415
 
     async def always_fail(*args: str, cwd: Path | None = None) -> None:
         if args[:2] == ("worktree", "remove"):
@@ -261,7 +261,7 @@ class FakeLandBackend:
         self._handles: dict[str, object] = {}
 
     async def spawn_land(self, job: Job) -> object:
-        from claude_fleet.orchestrator.land_events import LandHandle, LandResult  # noqa: PLC0415
+        from rookery.orchestrator.land_events import LandHandle, LandResult  # noqa: PLC0415
 
         self.spawn_calls.append(job.id)
         result = LandResult(
@@ -278,7 +278,7 @@ class FakeLandBackend:
         return handle
 
     async def harvest(self, handle: object) -> object:
-        from claude_fleet.orchestrator.land_events import LandHandle  # noqa: PLC0415
+        from rookery.orchestrator.land_events import LandHandle  # noqa: PLC0415
 
         assert isinstance(handle, LandHandle)
         if handle.task.done():
@@ -292,7 +292,7 @@ class FakeLandBackend:
 async def _run_daemon_ticks(daemon: object, ticks: int) -> None:
     """Run the daemon for a fixed number of ticks then stop."""
     import asyncio  # noqa: PLC0415
-    from claude_fleet.orchestrator.daemon import Daemon  # noqa: PLC0415
+    from rookery.orchestrator.daemon import Daemon  # noqa: PLC0415
 
     assert isinstance(daemon, Daemon)
     stop = asyncio.Event()
@@ -306,8 +306,8 @@ async def _run_daemon_ticks(daemon: object, ticks: int) -> None:
 
 async def test_daemon_calls_lifecycle_retire_on_landed(tmp_path: Path) -> None:
     """When auto_retire=True and job transitions to landed, lifecycle.retire() is called."""
-    from claude_fleet.orchestrator.orchestrator import Orchestrator  # noqa: PLC0415
-    from claude_fleet.orchestrator.daemon import Daemon  # noqa: PLC0415
+    from rookery.orchestrator.orchestrator import Orchestrator  # noqa: PLC0415
+    from rookery.orchestrator.daemon import Daemon  # noqa: PLC0415
     from tests.unit.orchestrator.fakes import FakeBackend, FakeSpec  # noqa: PLC0415
 
     db = tmp_path / "daemon_retire.db"
@@ -360,8 +360,8 @@ async def test_daemon_does_not_call_lifecycle_retire_when_disabled(
     tmp_path: Path,
 ) -> None:
     """When auto_retire=False, lifecycle.retire() is never called on landed."""
-    from claude_fleet.orchestrator.orchestrator import Orchestrator  # noqa: PLC0415
-    from claude_fleet.orchestrator.daemon import Daemon  # noqa: PLC0415
+    from rookery.orchestrator.orchestrator import Orchestrator  # noqa: PLC0415
+    from rookery.orchestrator.daemon import Daemon  # noqa: PLC0415
     from tests.unit.orchestrator.fakes import FakeBackend  # noqa: PLC0415
 
     db = tmp_path / "daemon_noretire.db"
@@ -405,8 +405,8 @@ async def test_daemon_lifecycle_retire_failure_does_not_crash_daemon(
     tmp_path: Path,
 ) -> None:
     """If lifecycle.retire() raises, the daemon logs a warning and keeps running."""
-    from claude_fleet.orchestrator.orchestrator import Orchestrator  # noqa: PLC0415
-    from claude_fleet.orchestrator.daemon import Daemon  # noqa: PLC0415
+    from rookery.orchestrator.orchestrator import Orchestrator  # noqa: PLC0415
+    from rookery.orchestrator.daemon import Daemon  # noqa: PLC0415
     from tests.unit.orchestrator.fakes import FakeBackend  # noqa: PLC0415
 
     db = tmp_path / "daemon_retire_fail.db"
@@ -459,9 +459,9 @@ def test_cli_worktree_retire_happy_path(
     lifecycle: GitWorktreeLifecycle,
 ) -> None:
     """CLI ``worktree retire <id>`` happy path: landed job, clean worktree."""
-    from claude_fleet.cli import app  # noqa: PLC0415
-    from claude_fleet.orchestrator.orchestrator import Orchestrator  # noqa: PLC0415
-    from claude_fleet.orchestrator.config import OrchestratorConfig  # noqa: PLC0415
+    from rookery.cli import app  # noqa: PLC0415
+    from rookery.orchestrator.orchestrator import Orchestrator  # noqa: PLC0415
+    from rookery.orchestrator.config import OrchestratorConfig  # noqa: PLC0415
 
     db = tmp_path / "cli_retire.db"
     cfg = OrchestratorConfig(db_path=db)
@@ -505,9 +505,9 @@ def test_cli_worktree_retire_happy_path(
 
 def test_cli_worktree_retire_non_landed_job_exits_1(tmp_path: Path) -> None:
     """CLI ``worktree retire <id>`` on a non-landed job exits with code 1."""
-    from claude_fleet.cli import app  # noqa: PLC0415
-    from claude_fleet.orchestrator.orchestrator import Orchestrator  # noqa: PLC0415
-    from claude_fleet.orchestrator.config import OrchestratorConfig  # noqa: PLC0415
+    from rookery.cli import app  # noqa: PLC0415
+    from rookery.orchestrator.orchestrator import Orchestrator  # noqa: PLC0415
+    from rookery.orchestrator.config import OrchestratorConfig  # noqa: PLC0415
 
     db = tmp_path / "cli_retire_nonlanded.db"
     cfg = OrchestratorConfig(db_path=db)

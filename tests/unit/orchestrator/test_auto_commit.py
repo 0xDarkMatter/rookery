@@ -20,9 +20,9 @@ from typing import Any
 
 import pytest
 
-from claude_fleet.orchestrator import Orchestrator
-from claude_fleet.orchestrator.backend import Job, OrchestratorBackend, WorkerHandle
-from claude_fleet.orchestrator.daemon import Daemon
+from rookery.orchestrator import Orchestrator
+from rookery.orchestrator.backend import Job, OrchestratorBackend, WorkerHandle
+from rookery.orchestrator.daemon import Daemon
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -181,7 +181,7 @@ async def test_pass_verdict_dirty_worktree_auto_commits(tmp_path: Path) -> None:
     # Commit message should contain the job id and summary line.
     log_msg = _git(wt, "log", "-1", "--pretty=%s").stdout.strip()
     assert "J1" in log_msg
-    assert "gitstats" in log_msg.lower() or "claude-fleet" in log_msg.lower()
+    assert "gitstats" in log_msg.lower() or "rookery" in log_msg.lower()
 
     orch.close()
 

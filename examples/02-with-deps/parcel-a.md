@@ -12,7 +12,7 @@ notes: |
 
 # Parcel A (no dependencies)
 
-You are running inside a fresh git worktree under a `claude-fleet` daemon. This parcel runs first; `parcel-b` is blocked until you reach a terminal `done` status.
+You are running inside a fresh git worktree under a `rookery` daemon. This parcel runs first; `parcel-b` is blocked until you reach a terminal `done` status.
 
 ## Acceptance
 

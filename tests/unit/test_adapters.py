@@ -16,11 +16,11 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from claude_fleet.adapters.base import VerdictAdapter, VerdictResult
-from claude_fleet.adapters.exit_code import ExitCodeAdapter
-from claude_fleet.adapters.json_result import JsonResultAdapter
-from claude_fleet.adapters.marker_file import MarkerFileAdapter
-from claude_fleet.adapters.registry import (
+from rookery.adapters.base import VerdictAdapter, VerdictResult
+from rookery.adapters.exit_code import ExitCodeAdapter
+from rookery.adapters.json_result import JsonResultAdapter
+from rookery.adapters.marker_file import MarkerFileAdapter
+from rookery.adapters.registry import (
     VERDICT_ADAPTERS,
     UnknownVerdictAdapter,
     get_verdict_adapter,
@@ -380,7 +380,7 @@ class TestPerParcelOverride:
 
     def test_enqueue_stores_verdict_adapter(self, tmp_path: Path) -> None:
         """Enqueuing with verdict_adapter stores it on the Job."""
-        from claude_fleet.orchestrator.orchestrator import Orchestrator
+        from rookery.orchestrator.orchestrator import Orchestrator
 
         db = tmp_path / "q.db"
         orch = Orchestrator(db_path=db)
@@ -400,7 +400,7 @@ class TestPerParcelOverride:
 
     def test_enqueue_default_verdict_adapter_is_none(self, tmp_path: Path) -> None:
         """verdict_adapter defaults to NULL (None) when not specified."""
-        from claude_fleet.orchestrator.orchestrator import Orchestrator
+        from rookery.orchestrator.orchestrator import Orchestrator
 
         db = tmp_path / "q.db"
         orch = Orchestrator(db_path=db)
@@ -414,8 +414,8 @@ class TestPerParcelOverride:
         """Daemon._get_verdict_adapter_for_job returns job-specific adapter."""
         import asyncio
 
-        from claude_fleet.orchestrator.daemon import Daemon
-        from claude_fleet.orchestrator.orchestrator import Orchestrator
+        from rookery.orchestrator.daemon import Daemon
+        from rookery.orchestrator.orchestrator import Orchestrator
         from tests.unit.orchestrator.fakes import FakeBackend
 
         db = tmp_path / "q.db"
@@ -435,8 +435,8 @@ class TestPerParcelOverride:
 
     def test_daemon_falls_back_to_default_when_no_override(self, tmp_path: Path) -> None:
         """Daemon._get_verdict_adapter_for_job uses default when job has no override."""
-        from claude_fleet.orchestrator.daemon import Daemon
-        from claude_fleet.orchestrator.orchestrator import Orchestrator
+        from rookery.orchestrator.daemon import Daemon
+        from rookery.orchestrator.orchestrator import Orchestrator
         from tests.unit.orchestrator.fakes import FakeBackend
 
         db = tmp_path / "q.db"
@@ -452,8 +452,8 @@ class TestPerParcelOverride:
 
     def test_daemon_raises_for_unknown_override(self, tmp_path: Path) -> None:
         """_get_verdict_adapter_for_job raises UnknownVerdictAdapter for bad name."""
-        from claude_fleet.orchestrator.daemon import Daemon
-        from claude_fleet.orchestrator.orchestrator import Orchestrator
+        from rookery.orchestrator.daemon import Daemon
+        from rookery.orchestrator.orchestrator import Orchestrator
         from tests.unit.orchestrator.fakes import FakeBackend
 
         db = tmp_path / "q.db"

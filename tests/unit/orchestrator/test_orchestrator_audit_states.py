@@ -17,9 +17,9 @@ from pathlib import Path
 
 import pytest
 
-from claude_fleet.orchestrator import MAX_AUDIT_ITER, AuditReport, Orchestrator
-from claude_fleet.orchestrator.config import AuditLoopConfig
-from claude_fleet.orchestrator.orchestrator import JobNotFound
+from rookery.orchestrator import MAX_AUDIT_ITER, AuditReport, Orchestrator
+from rookery.orchestrator.config import AuditLoopConfig
+from rookery.orchestrator.orchestrator import JobNotFound
 
 
 @pytest.fixture()

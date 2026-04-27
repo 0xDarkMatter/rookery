@@ -14,7 +14,7 @@ notes: |
 
 # Parcel B (depends on parcel-a)
 
-You are running inside a fresh git worktree under a `claude-fleet` daemon. By the time you receive this prompt, `parcel-a` has already reached `done` — its dependency was honoured by the queue, not by you.
+You are running inside a fresh git worktree under a `rookery` daemon. By the time you receive this prompt, `parcel-a` has already reached `done` — its dependency was honoured by the queue, not by you.
 
 ## Acceptance
 

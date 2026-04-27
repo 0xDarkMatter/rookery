@@ -1,4 +1,4 @@
-"""Typer CliRunner tests for ``claude-fleet ...``."""
+"""Typer CliRunner tests for ``rookery ...``."""
 
 from __future__ import annotations
 
@@ -8,7 +8,7 @@ from pathlib import Path
 import pytest
 from typer.testing import CliRunner
 
-from claude_fleet.cli import app
+from rookery.cli import app
 
 
 @pytest.fixture()
@@ -108,8 +108,8 @@ def test_enqueue_deps_comma_list(runner: CliRunner, tmp_path: Path) -> None:
 def test_daemon_stop_reads_default_pidfile(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """``daemon-stop`` defaults to reading ``claude-fleet.pid``."""
-    from claude_fleet.cli import daemon as daemon_mod
+    """``daemon-stop`` defaults to reading ``rookery.pid``."""
+    from rookery.cli import daemon as daemon_mod
 
     sent: list[tuple[int, int]] = []
 
@@ -133,7 +133,7 @@ def test_daemon_stop_reads_default_pidfile(
 def test_daemon_stop_explicit_pid_overrides_pidfile(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    from claude_fleet.cli import daemon as daemon_mod
+    from rookery.cli import daemon as daemon_mod
 
     sent: list[int] = []
 
@@ -151,7 +151,7 @@ def test_daemon_stop_explicit_pid_overrides_pidfile(
 def test_daemon_stop_missing_pidfile_errors(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    from claude_fleet.cli import daemon as daemon_mod
+    from rookery.cli import daemon as daemon_mod
 
     monkeypatch.setattr(
         daemon_mod.os, "kill", lambda *a, **kw: None

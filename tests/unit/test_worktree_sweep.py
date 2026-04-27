@@ -28,8 +28,8 @@ from unittest.mock import patch
 import pytest
 from typer.testing import CliRunner
 
-from claude_fleet.orchestrator.backend import Job
-from claude_fleet.worktree import GitWorktreeLifecycle, OrphanInfo, find_orphans
+from rookery.orchestrator.backend import Job
+from rookery.worktree import GitWorktreeLifecycle, OrphanInfo, find_orphans
 
 
 # ---------------------------------------------------------------------------
@@ -357,7 +357,7 @@ def test_cli_sweep_dry_run_no_fs_changes(
     tmp_path: Path,
 ) -> None:
     """CLI --dry-run lists orphans without removing them."""
-    from claude_fleet.cli import app  # noqa: PLC0415
+    from rookery.cli import app  # noqa: PLC0415
 
     db = tmp_path / "sweep_cli.db"
     _make_db(db)
@@ -395,7 +395,7 @@ def test_cli_sweep_removes_orphan(
     tmp_path: Path,
 ) -> None:
     """CLI sweep (no --dry-run) removes an orphan worktree."""
-    from claude_fleet.cli import app  # noqa: PLC0415
+    from rookery.cli import app  # noqa: PLC0415
 
     db = tmp_path / "sweep_cli_remove.db"
     _make_db(db)
@@ -428,7 +428,7 @@ def test_cli_sweep_no_orphans_exit_0(
     tmp_path: Path,
 ) -> None:
     """CLI sweep exits 0 with a clean message when no orphans are found."""
-    from claude_fleet.cli import app  # noqa: PLC0415
+    from rookery.cli import app  # noqa: PLC0415
 
     db = tmp_path / "sweep_none.db"
     _make_db(db)

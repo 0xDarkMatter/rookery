@@ -8,7 +8,7 @@ allowed-tools: "Read, Bash, Glob, Grep, Write"
 
 The canonical post-build review of a single parcel. Produces a verdict, a findings table with file:line evidence, and a versioned audit file. Does not merge. Does not edit parcel source. Writes exactly one file: the audit.
 
-Bundled with **claude-fleet**. Pairs with `claude-fleet status`, `claude-fleet land history`, and `claude-fleet worktree list` for fleet-level visibility around the audit.
+Bundled with **rookery**. Pairs with `rookery status`, `rookery land history`, and `rookery worktree list` for fleet-level visibility around the audit.
 
 ## When to use
 
@@ -26,8 +26,8 @@ Bundled with **claude-fleet**. Pairs with `claude-fleet status`, `claude-fleet l
 
 This skill operates on parcel worktrees that live under a configurable root. Resolve `<worktrees_root>` once, in this order:
 
-1. **`claude-fleet.yaml` in CWD**: read the `worktrees_root` key (top-level). Use this if present and non-empty.
-2. **`CLAUDE_FLEET_WORKTREES` env var**: fall back to this if step 1 yielded nothing.
+1. **`rookery.yaml` in CWD**: read the `worktrees_root` key (top-level). Use this if present and non-empty.
+2. **`ROOKERY_WORKTREES` env var**: fall back to this if step 1 yielded nothing.
 3. **Default**: `./worktrees` (relative to CWD).
 
 Resolve the **project repo root** with `git rev-parse --show-toplevel` (run from CWD) — this is the path used by `uv -C <repo>` and for reading the spec.
@@ -184,7 +184,7 @@ Commit the audit (on `main`, via the project repo) with a message like `audit(pa
 | Running the dev loop without `--extra dev` | Dev deps are scoped to the extra; bare `uv sync` is a false-negative setup |
 | Writing to the worktree's PARCEL_DONE.md | The parcel session owns that file; audits go to the audits dir |
 | Reading files outside the diff "for context" | Expands scope, inflates audit, misses the point |
-| Hardcoding a worktrees path | Always resolve via `claude-fleet.yaml` → `CLAUDE_FLEET_WORKTREES` → `./worktrees` |
+| Hardcoding a worktrees path | Always resolve via `rookery.yaml` → `ROOKERY_WORKTREES` → `./worktrees` |
 
 ## See also
 
@@ -192,4 +192,4 @@ Commit the audit (on `main`, via the project repo) with a message like `audit(pa
 - `parcel-roster` — surface-level inventory; use before picking what to audit
 - `wave-triage` — consumes audit verdicts to sequence merges
 - `parcel-generate` — authors the spec this skill compares against
-- `claude-fleet status` / `claude-fleet land history` / `claude-fleet worktree list` — fleet-level commands for orientation around the audit
+- `rookery status` / `rookery land history` / `rookery worktree list` — fleet-level commands for orientation around the audit

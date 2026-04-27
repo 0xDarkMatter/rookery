@@ -1,4 +1,4 @@
-"""Tests for claude_fleet.parcel — scaffold + validation (G3)."""
+"""Tests for rookery.parcel — scaffold + validation (G3)."""
 
 from __future__ import annotations
 
@@ -7,8 +7,8 @@ from pathlib import Path
 import pytest
 from typer.testing import CliRunner
 
-from claude_fleet.cli import app
-from claude_fleet.parcel import ValidationResult, parcel_new, parcel_validate
+from rookery.cli import app
+from rookery.parcel import ValidationResult, parcel_new, parcel_validate
 
 
 # ---------------------------------------------------------------------------

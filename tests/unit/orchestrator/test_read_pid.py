@@ -1,16 +1,16 @@
 """Unit tests for ``_read_worktree_pid``.
 
-Skipped: ``_read_worktree_pid`` was not lifted into the claude-fleet CLI.
+Skipped: ``_read_worktree_pid`` was not lifted into the rookery CLI.
 The function reads ``.pid`` / ``.winpid`` from a worker worktree to determine
 a running worker's PID. This functionality may be added in a future release
-as part of a ``claude-fleet watch`` or ``claude-fleet claim`` command.
+as part of a ``rookery watch`` or ``rookery claim`` command.
 """
 
 import pytest
 
 pytestmark = pytest.mark.skip(
     reason=(
-        "TODO P5: _read_worktree_pid not in claude-fleet CLI; "
+        "TODO P5: _read_worktree_pid not in rookery CLI; "
         "re-enable when 'claim'/'watch' commands are implemented"
     )
 )

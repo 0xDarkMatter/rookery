@@ -1,17 +1,17 @@
 """Tests for the ``claim`` command — status / tail / done dump.
 
-Skipped: the ``claim`` command was not lifted into claude-fleet's CLI.
+Skipped: the ``claim`` command was not lifted into rookery's CLI.
 The ``claim`` sub-command inspected a running worker's worktree and PID state
-— functionality that maps to a future ``claude-fleet status --watch`` or
+— functionality that maps to a future ``rookery status --watch`` or
 similar surface. The underlying helper functions (_find_parcel_done,
-_tail_lines, _read_worktree_pid) do exist in claude_fleet.cli.daemon but
+_tail_lines, _read_worktree_pid) do exist in rookery.cli.daemon but
 there is no top-level ``claim`` Typer command.
 """
 
 import pytest
 
 pytestmark = pytest.mark.skip(
-    reason="TODO P5: 'claim' command not yet implemented in claude-fleet CLI"
+    reason="TODO P5: 'claim' command not yet implemented in rookery CLI"
 )
 
 

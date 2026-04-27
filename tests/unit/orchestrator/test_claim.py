@@ -12,7 +12,7 @@ from pathlib import Path
 
 import pytest
 
-from claude_fleet.orchestrator import Orchestrator
+from rookery.orchestrator import Orchestrator
 
 
 @pytest.fixture()

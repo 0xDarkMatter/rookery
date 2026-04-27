@@ -5,7 +5,7 @@ from __future__ import annotations
 import sqlite3
 from pathlib import Path
 
-from claude_fleet.orchestrator import schema
+from rookery.orchestrator import schema
 
 
 def _table_names(conn: sqlite3.Connection) -> set[str]:

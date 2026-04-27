@@ -18,8 +18,8 @@ from pathlib import Path
 
 import pytest
 
-from claude_fleet.orchestrator import LandEvent, Orchestrator
-from claude_fleet.orchestrator.orchestrator import JobNotFound
+from rookery.orchestrator import LandEvent, Orchestrator
+from rookery.orchestrator.orchestrator import JobNotFound
 
 
 @pytest.fixture()

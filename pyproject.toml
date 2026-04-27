@@ -1,6 +1,6 @@
 [project]
-name = "claude-fleet"
-version = "0.1.0"
+name = "rookery"
+version = "0.2.0"
 description = "Persistent parcel-dispatch queue + async daemon for unattended parallel `claude -p` sessions in git worktrees."
 readme = "README.md"
 requires-python = ">=3.12"
@@ -47,20 +47,20 @@ dev = [
 ]
 
 [project.scripts]
-claude-fleet = "claude_fleet.cli.main:cli_main"
-claude-fleetd = "claude_fleet.orchestrator.__main__:main"
+rookery = "rookery.cli.main:cli_main"
+rookery-daemon = "rookery.orchestrator.__main__:main"
 
 [project.urls]
-Homepage = "https://github.com/0xDarkMatter/claude-fleet"
-Repository = "https://github.com/0xDarkMatter/claude-fleet"
-Issues = "https://github.com/0xDarkMatter/claude-fleet/issues"
+Homepage = "https://github.com/0xDarkMatter/rookery"
+Repository = "https://github.com/0xDarkMatter/rookery"
+Issues = "https://github.com/0xDarkMatter/rookery/issues"
 
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
-packages = ["src/claude_fleet"]
+packages = ["src/rookery"]
 
 [tool.ruff]
 line-length = 100

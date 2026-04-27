@@ -1,6 +1,6 @@
 # Deployment
 
-`claude-fleetd` is a long-running foreground process. Put it under any process supervisor that handles SIGTERM cleanly. Three reference recipes follow.
+`rookery-daemon` is a long-running foreground process. Put it under any process supervisor that handles SIGTERM cleanly. Three reference recipes follow.
 
 See [QUICKSTART.md](QUICKSTART.md) for first-run setup. See the README for config reference.
 
@@ -9,12 +9,12 @@ See [QUICKSTART.md](QUICKSTART.md) for first-run setup. See the README for confi
 Before deploying, in the project directory:
 
 ```bash
-claude-fleet init           # scaffolds config + db + dirs
-claude-fleet doctor         # confirms git, claude, profiles, OAuth, schema
+rookery init           # scaffolds config + db + dirs
+rookery doctor         # confirms git, claude, profiles, OAuth, schema
 unset ANTHROPIC_API_KEY     # daemon refuses to start with this set
 ```
 
-The daemon writes `claude-fleet.pid` next to the database. Each supervisor below reuses that pidfile so `claude-fleet daemon-stop` keeps working.
+The daemon writes `rookery.pid` next to the database. Each supervisor below reuses that pidfile so `rookery daemon-stop` keeps working.
 
 ## pm2
 
@@ -24,11 +24,11 @@ The daemon writes `claude-fleet.pid` next to the database. Each supervisor below
 module.exports = {
   apps: [
     {
-      name: "claude-fleet",
-      script: "claude-fleetd",
+      name: "rookery",
+      script: "rookery-daemon",
       cwd: "/srv/myproject",
       env: {
-        CLAUDE_FLEET_CONFIG: "/srv/myproject/claude-fleet.yaml",
+        ROOKERY_CONFIG: "/srv/myproject/rookery.yaml",
       },
       autorestart: true,
       max_restarts: 10,
@@ -42,19 +42,19 @@ Start: `pm2 start ecosystem.config.cjs && pm2 save`.
 
 ## systemd
 
-`/etc/systemd/system/claude-fleet.service`:
+`/etc/systemd/system/rookery.service`:
 
 ```ini
 [Unit]
-Description=claude-fleet daemon
+Description=rookery daemon
 After=network.target
 
 [Service]
 Type=simple
 User=fleet
 WorkingDirectory=/srv/myproject
-Environment=CLAUDE_FLEET_CONFIG=/srv/myproject/claude-fleet.yaml
-ExecStart=/usr/local/bin/claude-fleetd
+Environment=ROOKERY_CONFIG=/srv/myproject/rookery.yaml
+ExecStart=/usr/local/bin/rookery-daemon
 Restart=on-failure
 RestartSec=5
 TimeoutStopSec=30
@@ -64,7 +64,7 @@ KillSignal=SIGTERM
 WantedBy=multi-user.target
 ```
 
-Enable: `systemctl daemon-reload && systemctl enable --now claude-fleet`.
+Enable: `systemctl daemon-reload && systemctl enable --now rookery`.
 
 ## Docker
 
@@ -82,19 +82,19 @@ RUN apt-get update && apt-get install -y --no-install-recommends git curl \
 WORKDIR /srv/project
 COPY . /srv/project
 
-RUN pip install --no-cache-dir claude-fleet
+RUN pip install --no-cache-dir rookery
 
-ENV CLAUDE_FLEET_CONFIG=/srv/project/claude-fleet.yaml
+ENV ROOKERY_CONFIG=/srv/project/rookery.yaml
 
 STOPSIGNAL SIGTERM
-CMD ["claude-fleetd"]
+CMD ["rookery-daemon"]
 ```
 
-The container needs persistent storage for `claude-fleet.db`, `worktrees/`, and the OAuth credential store. Mount them as volumes.
+The container needs persistent storage for `rookery.db`, `worktrees/`, and the OAuth credential store. Mount them as volumes.
 
 ## Operational notes
 
 - **Graceful shutdown**: SIGTERM finishes the current tick, signals workers, waits up to `shutdown_grace_s` (default 30s), then flips in-flight jobs back to `pending` so the next start picks them up.
-- **Lease reclaim**: stale leases auto-recover on the next tick; `claude-fleet reclaim` forces a sweep.
-- **Health**: `claude-fleet daemon-status` tails the pidfile + db heartbeat.
-- **Failure modes + recovery**: see the table at the bottom of [BUILD_PLAN](https://github.com/0xDarkMatter/claude-fleet/blob/main/docs/BUILD_PLAN.md) (Windows worktree quirks, lease expiry, locked-file teardown, etc.).
+- **Lease reclaim**: stale leases auto-recover on the next tick; `rookery reclaim` forces a sweep.
+- **Health**: `rookery daemon-status` tails the pidfile + db heartbeat.
+- **Failure modes + recovery**: see the table at the bottom of [BUILD_PLAN](https://github.com/0xDarkMatter/rookery/blob/main/docs/BUILD_PLAN.md) (Windows worktree quirks, lease expiry, locked-file teardown, etc.).

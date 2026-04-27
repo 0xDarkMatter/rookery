@@ -21,9 +21,9 @@ from pathlib import Path
 
 import pytest
 
-from claude_fleet.orchestrator.backend import Job
-from claude_fleet.orchestrator.land_backend import LandBackend
-from claude_fleet.orchestrator.land_events import LandResult
+from rookery.orchestrator.backend import Job
+from rookery.orchestrator.land_backend import LandBackend
+from rookery.orchestrator.land_events import LandResult
 
 pytestmark = pytest.mark.skipif(
     shutil.which("git") is None, reason="git not on PATH"
@@ -42,10 +42,10 @@ def _git(cwd: Path, *args: str, check: bool = True) -> subprocess.CompletedProce
     env = dict(os.environ)
     # Deterministic identity for fabricated commits (no reliance on host
     # git config, which may be unset in CI).
-    env.setdefault("GIT_AUTHOR_NAME", "claude-fleet Test")
-    env.setdefault("GIT_AUTHOR_EMAIL", "test@claude-fleet.invalid")
-    env.setdefault("GIT_COMMITTER_NAME", "claude-fleet Test")
-    env.setdefault("GIT_COMMITTER_EMAIL", "test@claude-fleet.invalid")
+    env.setdefault("GIT_AUTHOR_NAME", "rookery Test")
+    env.setdefault("GIT_AUTHOR_EMAIL", "test@rookery.invalid")
+    env.setdefault("GIT_COMMITTER_NAME", "rookery Test")
+    env.setdefault("GIT_COMMITTER_EMAIL", "test@rookery.invalid")
     return subprocess.run(
         ["git", "-C", str(cwd), *args],
         check=check,

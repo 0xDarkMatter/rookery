@@ -8,7 +8,7 @@ allowed-tools: "Read, Bash, Glob, Grep"
 
 The end-to-end wave-level decision skill. Aggregates per-parcel signals into a single sequenced report that says: *these parcels are ready to merge now, these are blocked and why, these are at-risk, and the next safe merge is X*.
 
-Bundled with **claude-fleet**. Pairs with `claude-fleet status` (live fleet view), `claude-fleet land history` (what has actually landed on main), and `claude-fleet worktree list` (raw worktree listing). This skill is the decision-grade narrative layer above those CLIs.
+Bundled with **rookery**. Pairs with `rookery status` (live fleet view), `rookery land history` (what has actually landed on main), and `rookery worktree list` (raw worktree listing). This skill is the decision-grade narrative layer above those CLIs.
 
 Treats the wave's plan document as the source of truth for dep-order and gate definitions.
 
@@ -29,8 +29,8 @@ Treats the wave's plan document as the source of truth for dep-order and gate de
 
 This skill reads audits and worktree state under a configurable root. Resolve `<worktrees_root>` once, in this order:
 
-1. **`claude-fleet.yaml` in CWD**: read the `worktrees_root` key (top-level). Use this if present and non-empty.
-2. **`CLAUDE_FLEET_WORKTREES` env var**: fall back to this if step 1 yielded nothing.
+1. **`rookery.yaml` in CWD**: read the `worktrees_root` key (top-level). Use this if present and non-empty.
+2. **`ROOKERY_WORKTREES` env var**: fall back to this if step 1 yielded nothing.
 3. **Default**: `./worktrees` (relative to CWD).
 
 Resolve the **project repo root** with `git rev-parse --show-toplevel` (run from CWD) — used for `git -C <repo> log --grep=...` lookups against `main`.
@@ -137,7 +137,7 @@ EVALUATED-AT: <ISO timestamp>
 
 ### Step 7 — Do not act
 
-The skill reports. Merging, re-auditing, and authoring follow-up parcels are other concerns. The report is the product; hand-off is implicit. Operators can cross-check against `claude-fleet land history` to see what has already landed.
+The skill reports. Merging, re-auditing, and authoring follow-up parcels are other concerns. The report is the product; hand-off is implicit. Operators can cross-check against `rookery land history` to see what has already landed.
 
 ## Hard rules
 
@@ -166,7 +166,7 @@ The skill reports. Merging, re-auditing, and authoring follow-up parcels are oth
 - `parcel-reader` — PARCEL_DONE parsing; step 3 input
 - `parcel-audit` — verdict source; step 3 input
 - `parcel-generate` — authors the specs whose gates this skill evaluates against
-- `claude-fleet status` / `claude-fleet land history` / `claude-fleet worktree list` — CLI counterparts
+- `rookery status` / `rookery land history` / `rookery worktree list` — CLI counterparts
 
 ## Note on multi-role context
 

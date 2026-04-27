@@ -1,4 +1,4 @@
-"""Unit tests for :mod:`claude_fleet.orchestrator.verdict_parser`."""
+"""Unit tests for :mod:`rookery.orchestrator.verdict_parser`."""
 
 from __future__ import annotations
 
@@ -6,7 +6,7 @@ from pathlib import Path
 
 import pytest
 
-from claude_fleet.orchestrator.verdict_parser import parse_audit_report
+from rookery.orchestrator.verdict_parser import parse_audit_report
 
 
 def _write(tmp_path: Path, body: str) -> Path:

@@ -1,16 +1,16 @@
 """Tests for the ``watch`` command and its ``_watch_iteration`` core.
 
-Skipped: the ``watch`` command was not lifted into claude-fleet's CLI.
+Skipped: the ``watch`` command was not lifted into rookery's CLI.
 The ``watch`` sub-command polled job state and PID liveness in a loop —
-functionality that may be added in a future release as ``claude-fleet watch``
+functionality that may be added in a future release as ``rookery watch``
 or similar. The ``_watch_iteration`` helper that the tests drove does not
-exist in the claude-fleet codebase.
+exist in the rookery codebase.
 """
 
 import pytest
 
 pytestmark = pytest.mark.skip(
-    reason="TODO P5: 'watch' command not yet implemented in claude-fleet CLI"
+    reason="TODO P5: 'watch' command not yet implemented in rookery CLI"
 )
 
 

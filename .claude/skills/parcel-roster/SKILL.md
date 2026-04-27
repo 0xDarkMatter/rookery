@@ -8,7 +8,7 @@ allowed-tools: "Read, Bash, Glob, Grep"
 
 The across-the-board view of active parcel worktrees. Answers: *what parcels are in flight, what state are they in, and which ones are ready for audit or merge?*
 
-Bundled with **claude-fleet**. Pairs with `claude-fleet worktree list` (the lower-level CLI view) and `claude-fleet status` / `claude-fleet land history` (history-side views). This skill is the agent-friendly markdown analogue.
+Bundled with **rookery**. Pairs with `rookery worktree list` (the lower-level CLI view) and `rookery status` / `rookery land history` (history-side views). This skill is the agent-friendly markdown analogue.
 
 Mirrors `lane-roster` but targets the **parcel** tree (the configured worktrees root) rather than the **lane** tree (`.claude/worktrees/*`). The two are separate — do not conflate them.
 
@@ -29,8 +29,8 @@ Mirrors `lane-roster` but targets the **parcel** tree (the configured worktrees 
 
 This skill operates on parcel worktrees that live under a configurable root. Resolve `<worktrees_root>` once, in this order:
 
-1. **`claude-fleet.yaml` in CWD**: read the `worktrees_root` key (top-level). Use this if present and non-empty.
-2. **`CLAUDE_FLEET_WORKTREES` env var**: fall back to this if step 1 yielded nothing.
+1. **`rookery.yaml` in CWD**: read the `worktrees_root` key (top-level). Use this if present and non-empty.
+2. **`ROOKERY_WORKTREES` env var**: fall back to this if step 1 yielded nothing.
 3. **Default**: `./worktrees` (relative to CWD).
 
 The audits sibling lives at `<worktrees_root>/audits/`.
@@ -115,7 +115,7 @@ Absorbed parcels have shipped their work through main via rebase or squash; the 
 
 A parcel is **fresh** if `ahead > 0` (still has unmerged commits) OR `behind` is small (close to main).
 
-List at-risk rows separately below the main table. Mark absorbed rows with a distinct marker (e.g. trailing `(absorbed)`) so they do not confuse with in-flight parcels. Do not attempt to fix or prune — branch / worktree deletion is a separate concern (`claude-fleet worktree`).
+List at-risk rows separately below the main table. Mark absorbed rows with a distinct marker (e.g. trailing `(absorbed)`) so they do not confuse with in-flight parcels. Do not attempt to fix or prune — branch / worktree deletion is a separate concern (`rookery worktree`).
 
 ## Hard rules
 
@@ -144,4 +144,4 @@ List at-risk rows separately below the main table. Mark absorbed rows with a dis
 - `parcel-reader` — parses a single PARCEL_DONE.md into structured sections
 - `parcel-audit` — produces a verdict for one parcel
 - `wave-triage` — consumes this roster + audits to compute merge order
-- `claude-fleet worktree list` / `claude-fleet status` — CLI views of the same fleet
+- `rookery worktree list` / `rookery status` — CLI views of the same fleet

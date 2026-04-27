@@ -1,4 +1,4 @@
-"""Unit tests for ``claude_fleet.doctor`` and the ``doctor`` CLI command."""
+"""Unit tests for ``rookery.doctor`` and the ``doctor`` CLI command."""
 
 from __future__ import annotations
 
@@ -10,9 +10,9 @@ from unittest.mock import patch
 import pytest
 from typer.testing import CliRunner
 
-from claude_fleet.cli import app
-from claude_fleet.doctor import CheckResult, run_checks
-from claude_fleet.orchestrator.schema import apply_migrations
+from rookery.cli import app
+from rookery.doctor import CheckResult, run_checks
+from rookery.orchestrator.schema import apply_migrations
 
 
 # ---------------------------------------------------------------------------
@@ -27,7 +27,7 @@ def _make_valid_db(path: Path) -> None:
 
 
 def _make_valid_config(path: Path, db_path: Path, worktree_base: Path) -> None:
-    """Write a minimal valid claude-fleet.yaml."""
+    """Write a minimal valid rookery.yaml."""
     path.write_text(
         f"db_path: {db_path}\n"
         f"worktree_base: {worktree_base}\n",
@@ -72,11 +72,11 @@ class TestAllPass:
     """All checks mocked to succeed."""
 
     def test_run_checks_all_ok(self, tmp_path: Path) -> None:
-        db_path = tmp_path / "claude-fleet.db"
+        db_path = tmp_path / "rookery.db"
         worktree_base = tmp_path / "worktrees"
         worktree_base.mkdir()
         _make_valid_db(db_path)
-        config_path = tmp_path / "claude-fleet.yaml"
+        config_path = tmp_path / "rookery.yaml"
         _make_valid_config(config_path, db_path, worktree_base)
 
         with (
@@ -104,11 +104,11 @@ class TestAllPass:
         assert failed == [], f"Unexpected failures: {[r.name for r in failed]}"
 
     def test_cli_exits_0_all_pass(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-        db_path = tmp_path / "claude-fleet.db"
+        db_path = tmp_path / "rookery.db"
         worktree_base = tmp_path / "worktrees"
         worktree_base.mkdir()
         _make_valid_db(db_path)
-        config_path = tmp_path / "claude-fleet.yaml"
+        config_path = tmp_path / "rookery.yaml"
         _make_valid_config(config_path, db_path, worktree_base)
         monkeypatch.chdir(tmp_path)
 
@@ -140,11 +140,11 @@ class TestCheckFailures:
     # --- Check 1: claude binary ---
 
     def test_claude_binary_missing(self, tmp_path: Path) -> None:
-        db_path = tmp_path / "claude-fleet.db"
+        db_path = tmp_path / "rookery.db"
         worktree_base = tmp_path / "worktrees"
         worktree_base.mkdir()
         _make_valid_db(db_path)
-        config_path = tmp_path / "claude-fleet.yaml"
+        config_path = tmp_path / "rookery.yaml"
         _make_valid_config(config_path, db_path, worktree_base)
 
         def _which(b: str) -> str | None:
@@ -158,11 +158,11 @@ class TestCheckFailures:
         assert claude_check.remediation is not None
 
     def test_claude_binary_missing_cli_exits_1(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-        db_path = tmp_path / "claude-fleet.db"
+        db_path = tmp_path / "rookery.db"
         worktree_base = tmp_path / "worktrees"
         worktree_base.mkdir()
         _make_valid_db(db_path)
-        config_path = tmp_path / "claude-fleet.yaml"
+        config_path = tmp_path / "rookery.yaml"
         _make_valid_config(config_path, db_path, worktree_base)
         monkeypatch.chdir(tmp_path)
 
@@ -185,11 +185,11 @@ class TestCheckFailures:
     # --- Check 2: git ---
 
     def test_git_missing(self, tmp_path: Path) -> None:
-        db_path = tmp_path / "claude-fleet.db"
+        db_path = tmp_path / "rookery.db"
         worktree_base = tmp_path / "worktrees"
         worktree_base.mkdir()
         _make_valid_db(db_path)
-        config_path = tmp_path / "claude-fleet.yaml"
+        config_path = tmp_path / "rookery.yaml"
         _make_valid_config(config_path, db_path, worktree_base)
 
         def _which(b: str) -> str | None:
@@ -202,11 +202,11 @@ class TestCheckFailures:
         assert git_check.ok is False
 
     def test_git_too_old(self, tmp_path: Path) -> None:
-        db_path = tmp_path / "claude-fleet.db"
+        db_path = tmp_path / "rookery.db"
         worktree_base = tmp_path / "worktrees"
         worktree_base.mkdir()
         _make_valid_db(db_path)
-        config_path = tmp_path / "claude-fleet.yaml"
+        config_path = tmp_path / "rookery.yaml"
         _make_valid_config(config_path, db_path, worktree_base)
 
         with (
@@ -242,7 +242,7 @@ class TestCheckFailures:
     def test_db_missing(self, tmp_path: Path) -> None:
         worktree_base = tmp_path / "worktrees"
         worktree_base.mkdir()
-        config_path = tmp_path / "claude-fleet.yaml"
+        config_path = tmp_path / "rookery.yaml"
         missing_db = tmp_path / "nonexistent.db"
         _make_valid_config(config_path, missing_db, worktree_base)
 
@@ -256,9 +256,9 @@ class TestCheckFailures:
         """DB exists but _applied_migrations table absent."""
         worktree_base = tmp_path / "worktrees"
         worktree_base.mkdir()
-        db_path = tmp_path / "claude-fleet.db"
+        db_path = tmp_path / "rookery.db"
         db_path.touch()  # empty db, no tables
-        config_path = tmp_path / "claude-fleet.yaml"
+        config_path = tmp_path / "rookery.yaml"
         _make_valid_config(config_path, db_path, worktree_base)
 
         with patch("shutil.which", side_effect=lambda b: f"/usr/bin/{b}"):
@@ -270,10 +270,10 @@ class TestCheckFailures:
     # --- Check 5: worktree base ---
 
     def test_worktree_base_missing(self, tmp_path: Path) -> None:
-        db_path = tmp_path / "claude-fleet.db"
+        db_path = tmp_path / "rookery.db"
         _make_valid_db(db_path)
         missing_wt = tmp_path / "no-worktrees-here"
-        config_path = tmp_path / "claude-fleet.yaml"
+        config_path = tmp_path / "rookery.yaml"
         _make_valid_config(config_path, db_path, missing_wt)
 
         with patch("shutil.which", side_effect=lambda b: f"/usr/bin/{b}"):
@@ -285,11 +285,11 @@ class TestCheckFailures:
     # --- Check 6: OAuth token ---
 
     def test_oauth_token_missing(self, tmp_path: Path) -> None:
-        db_path = tmp_path / "claude-fleet.db"
+        db_path = tmp_path / "rookery.db"
         worktree_base = tmp_path / "worktrees"
         worktree_base.mkdir()
         _make_valid_db(db_path)
-        config_path = tmp_path / "claude-fleet.yaml"
+        config_path = tmp_path / "rookery.yaml"
         _make_valid_config(config_path, db_path, worktree_base)
 
         with (
@@ -310,11 +310,11 @@ class TestCheckFailures:
     # --- Check 7: ANTHROPIC_API_KEY must NOT be set ---
 
     def test_anthropic_api_key_set_fails(self, tmp_path: Path) -> None:
-        db_path = tmp_path / "claude-fleet.db"
+        db_path = tmp_path / "rookery.db"
         worktree_base = tmp_path / "worktrees"
         worktree_base.mkdir()
         _make_valid_db(db_path)
-        config_path = tmp_path / "claude-fleet.yaml"
+        config_path = tmp_path / "rookery.yaml"
         _make_valid_config(config_path, db_path, worktree_base)
 
         with (
@@ -335,11 +335,11 @@ class TestCheckFailures:
         assert api_check.remediation is not None
 
     def test_anthropic_api_key_unset_passes(self, tmp_path: Path) -> None:
-        db_path = tmp_path / "claude-fleet.db"
+        db_path = tmp_path / "rookery.db"
         worktree_base = tmp_path / "worktrees"
         worktree_base.mkdir()
         _make_valid_db(db_path)
-        config_path = tmp_path / "claude-fleet.yaml"
+        config_path = tmp_path / "rookery.yaml"
         _make_valid_config(config_path, db_path, worktree_base)
 
         with (
@@ -365,11 +365,11 @@ class TestCheckFailures:
 class TestSkippedChecks:
     def test_claude_lb_skipped_when_disabled(self, tmp_path: Path) -> None:
         """claude-lb check is skipped when config does not enable it."""
-        db_path = tmp_path / "claude-fleet.db"
+        db_path = tmp_path / "rookery.db"
         worktree_base = tmp_path / "worktrees"
         worktree_base.mkdir()
         _make_valid_db(db_path)
-        config_path = tmp_path / "claude-fleet.yaml"
+        config_path = tmp_path / "rookery.yaml"
         _make_valid_config(config_path, db_path, worktree_base)
 
         with patch("shutil.which", side_effect=lambda b: f"/usr/bin/{b}"):
@@ -380,11 +380,11 @@ class TestSkippedChecks:
 
     def test_skipped_check_does_not_cause_exit_1(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
         """Skipped checks are neutral — they must not trigger exit 1."""
-        db_path = tmp_path / "claude-fleet.db"
+        db_path = tmp_path / "rookery.db"
         worktree_base = tmp_path / "worktrees"
         worktree_base.mkdir()
         _make_valid_db(db_path)
-        config_path = tmp_path / "claude-fleet.yaml"
+        config_path = tmp_path / "rookery.yaml"
         _make_valid_config(config_path, db_path, worktree_base)
         monkeypatch.chdir(tmp_path)
 
@@ -409,11 +409,11 @@ class TestSkippedChecks:
 
 class TestJsonMode:
     def test_json_mode_parseable(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-        db_path = tmp_path / "claude-fleet.db"
+        db_path = tmp_path / "rookery.db"
         worktree_base = tmp_path / "worktrees"
         worktree_base.mkdir()
         _make_valid_db(db_path)
-        config_path = tmp_path / "claude-fleet.yaml"
+        config_path = tmp_path / "rookery.yaml"
         _make_valid_config(config_path, db_path, worktree_base)
         monkeypatch.chdir(tmp_path)
 
@@ -462,11 +462,11 @@ class TestJsonMode:
 
     def test_json_mode_structure_with_skipped(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
         """Skipped checks appear in JSON output with ok=null."""
-        db_path = tmp_path / "claude-fleet.db"
+        db_path = tmp_path / "rookery.db"
         worktree_base = tmp_path / "worktrees"
         worktree_base.mkdir()
         _make_valid_db(db_path)
-        config_path = tmp_path / "claude-fleet.yaml"
+        config_path = tmp_path / "rookery.yaml"
         _make_valid_config(config_path, db_path, worktree_base)
         monkeypatch.chdir(tmp_path)
 

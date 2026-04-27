@@ -7,8 +7,8 @@ from pathlib import Path
 
 import pytest
 
-from claude_fleet.orchestrator import Job, Orchestrator
-from claude_fleet.orchestrator.orchestrator import JobNotFound
+from rookery.orchestrator import Job, Orchestrator
+from rookery.orchestrator.orchestrator import JobNotFound
 
 
 @pytest.fixture()

@@ -1,15 +1,15 @@
-"""Unit tests for ``claude_fleet.profile_selector`` (G5).
+"""Unit tests for ``rookery.profile_selector`` (G5).
 
 Coverage
 --------
 - EnvVarSelector: empty list → ProfileListEmpty
 - EnvVarSelector: comma-list → round-robins (4 picks over 2 profiles)
-- EnvVarSelector: reads CLAUDE_FLEET_PROFILES env var when no list given
+- EnvVarSelector: reads ROOKERY_PROFILES env var when no list given
 - ClaudeLbSelector: mocked subprocess → parses JSON output into ProfileInfo
 - ClaudeLbSelector: binary missing → ClaudeLbBinaryMissing
 - ClaudeLbSelector: subprocess non-zero exit → RuntimeError with stderr
 - ClaudeLbSelector: malformed JSON → RuntimeError
-- WorkerBackend: CLAUDE_FLEET_PROFILES env → auto-wires EnvVarSelector
+- WorkerBackend: ROOKERY_PROFILES env → auto-wires EnvVarSelector
 """
 
 from __future__ import annotations
@@ -21,7 +21,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from claude_fleet.profile_selector import (
+from rookery.profile_selector import (
     ClaudeLbBinaryMissing,
     ClaudeLbSelector,
     EnvVarSelector,
@@ -98,8 +98,8 @@ async def test_env_var_selector_returns_profile_info() -> None:
 
 
 async def test_env_var_selector_reads_env_var(monkeypatch: pytest.MonkeyPatch) -> None:
-    """EnvVarSelector reads CLAUDE_FLEET_PROFILES when no list is given."""
-    monkeypatch.setenv("CLAUDE_FLEET_PROFILES", "roamhq,personal")
+    """EnvVarSelector reads ROOKERY_PROFILES when no list is given."""
+    monkeypatch.setenv("ROOKERY_PROFILES", "roamhq,personal")
 
     sel = EnvVarSelector()  # no explicit list
     picks = [await sel.pick() for _ in range(4)]
@@ -110,7 +110,7 @@ async def test_env_var_selector_reads_env_var(monkeypatch: pytest.MonkeyPatch) -
 
 async def test_env_var_selector_empty_env_var_raises(monkeypatch: pytest.MonkeyPatch) -> None:
     """EnvVarSelector raises ProfileListEmpty when env var is also empty."""
-    monkeypatch.delenv("CLAUDE_FLEET_PROFILES", raising=False)
+    monkeypatch.delenv("ROOKERY_PROFILES", raising=False)
 
     sel = EnvVarSelector()
     with pytest.raises(ProfileListEmpty):
@@ -128,7 +128,7 @@ async def test_claude_lb_selector_parses_json_output() -> None:
     mock_proc = _make_mock_proc(returncode=0, stdout=payload, stderr=b"")
 
     with patch(
-        "claude_fleet.profile_selector.asyncio.create_subprocess_exec",
+        "rookery.profile_selector.asyncio.create_subprocess_exec",
         new_callable=AsyncMock,
         return_value=mock_proc,
     ):
@@ -150,7 +150,7 @@ async def test_claude_lb_selector_passes_pick_args() -> None:
         captured_cmd.extend(args)
         return mock_proc
 
-    with patch("claude_fleet.profile_selector.asyncio.create_subprocess_exec", new=fake_exec):
+    with patch("rookery.profile_selector.asyncio.create_subprocess_exec", new=fake_exec):
         sel = ClaudeLbSelector(binary="/fake/claude-lb", pick_args=["--auto-refresh"])
         await sel.pick()
 
@@ -166,7 +166,7 @@ async def test_claude_lb_selector_binary_file_not_found_raises() -> None:
         raise FileNotFoundError("No such file or directory: '/no/such/claude-lb'")
 
     with patch(
-        "claude_fleet.profile_selector.asyncio.create_subprocess_exec",
+        "rookery.profile_selector.asyncio.create_subprocess_exec",
         new=raise_fnf,
     ):
         sel = ClaudeLbSelector(binary="/no/such/claude-lb", pick_args=[])
@@ -178,7 +178,7 @@ async def test_claude_lb_selector_missing_from_path_raises(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """ClaudeLbSelector raises ClaudeLbBinaryMissing when binary is not on PATH."""
-    with patch("claude_fleet.profile_selector.shutil.which", return_value=None):
+    with patch("rookery.profile_selector.shutil.which", return_value=None):
         sel = ClaudeLbSelector()  # uses default "claude-lb" name
         with pytest.raises(ClaudeLbBinaryMissing, match="not on PATH"):
             await sel.pick()
@@ -193,7 +193,7 @@ async def test_claude_lb_selector_non_zero_exit_raises() -> None:
     )
 
     with patch(
-        "claude_fleet.profile_selector.asyncio.create_subprocess_exec",
+        "rookery.profile_selector.asyncio.create_subprocess_exec",
         new_callable=AsyncMock,
         return_value=mock_proc,
     ):
@@ -211,7 +211,7 @@ async def test_claude_lb_selector_malformed_json_raises() -> None:
     )
 
     with patch(
-        "claude_fleet.profile_selector.asyncio.create_subprocess_exec",
+        "rookery.profile_selector.asyncio.create_subprocess_exec",
         new_callable=AsyncMock,
         return_value=mock_proc,
     ):
@@ -229,7 +229,7 @@ async def test_claude_lb_selector_missing_data_key_raises() -> None:
     )
 
     with patch(
-        "claude_fleet.profile_selector.asyncio.create_subprocess_exec",
+        "rookery.profile_selector.asyncio.create_subprocess_exec",
         new_callable=AsyncMock,
         return_value=mock_proc,
     ):
@@ -247,7 +247,7 @@ async def test_claude_lb_selector_empty_name_raises() -> None:
     )
 
     with patch(
-        "claude_fleet.profile_selector.asyncio.create_subprocess_exec",
+        "rookery.profile_selector.asyncio.create_subprocess_exec",
         new_callable=AsyncMock,
         return_value=mock_proc,
     ):
@@ -265,16 +265,16 @@ async def test_worker_backend_env_profiles_auto_wires_selector(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
 ) -> None:
-    """When CLAUDE_FLEET_PROFILES is set, WorkerBackend auto-wires EnvVarSelector.
+    """When ROOKERY_PROFILES is set, WorkerBackend auto-wires EnvVarSelector.
 
     We don't call spawn() (would need real git + claude binary); we just
     verify that _profile_selector is an EnvVarSelector and picks the expected
     profiles in order.
     """
-    monkeypatch.setenv("CLAUDE_FLEET_PROFILES", "alice,bob")
+    monkeypatch.setenv("ROOKERY_PROFILES", "alice,bob")
     monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
 
-    from claude_fleet.orchestrator.worker_backend import WorkerBackend  # noqa: PLC0415
+    from rookery.orchestrator.worker_backend import WorkerBackend  # noqa: PLC0415
 
     backend = WorkerBackend(repo_root=tmp_path)
 
@@ -291,10 +291,10 @@ async def test_worker_backend_explicit_selector_used(
     tmp_path: Path,
 ) -> None:
     """Explicitly injected ProfileSelector is used as-is, ignoring env."""
-    monkeypatch.delenv("CLAUDE_FLEET_PROFILES", raising=False)
+    monkeypatch.delenv("ROOKERY_PROFILES", raising=False)
     monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
 
-    from claude_fleet.orchestrator.worker_backend import WorkerBackend  # noqa: PLC0415
+    from rookery.orchestrator.worker_backend import WorkerBackend  # noqa: PLC0415
 
     sel = EnvVarSelector(profiles=["injected"])
     backend = WorkerBackend(repo_root=tmp_path, profile_selector=sel)
@@ -309,10 +309,10 @@ async def test_worker_backend_no_env_no_selector_is_none(
     tmp_path: Path,
 ) -> None:
     """WorkerBackend with no env var and no selector leaves _profile_selector as None."""
-    monkeypatch.delenv("CLAUDE_FLEET_PROFILES", raising=False)
+    monkeypatch.delenv("ROOKERY_PROFILES", raising=False)
     monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
 
-    from claude_fleet.orchestrator.worker_backend import WorkerBackend  # noqa: PLC0415
+    from rookery.orchestrator.worker_backend import WorkerBackend  # noqa: PLC0415
 
     backend = WorkerBackend(repo_root=tmp_path)
     assert backend._profile_selector is None

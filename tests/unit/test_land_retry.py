@@ -17,7 +17,7 @@ from pathlib import Path
 import pytest
 from typer.testing import CliRunner
 
-from claude_fleet.orchestrator.orchestrator import (
+from rookery.orchestrator.orchestrator import (
     JobNotFound,
     LandRetryError,
     Orchestrator,
@@ -169,7 +169,7 @@ class TestLandRetryCLI:
 
     def test_cli_happy_path_exit_0(self, tmp_path: Path) -> None:
         """Happy path: merge-blocked job → exit 0, success message printed."""
-        from claude_fleet.cli import app  # noqa: PLC0415
+        from rookery.cli import app  # noqa: PLC0415
 
         db = self._db_path(tmp_path)
         orch = Orchestrator(db, lease_ttl_s=600)
@@ -198,7 +198,7 @@ class TestLandRetryCLI:
 
     def test_cli_non_merge_blocked_exit_1(self, tmp_path: Path) -> None:
         """Non-merge-blocked job → exit 1."""
-        from claude_fleet.cli import app  # noqa: PLC0415
+        from rookery.cli import app  # noqa: PLC0415
 
         db = self._db_path(tmp_path, "cli_retry_non_blocked.db")
         orch = Orchestrator(db, lease_ttl_s=600)
@@ -220,7 +220,7 @@ class TestLandRetryCLI:
 
     def test_cli_missing_worktree_exit_7(self, tmp_path: Path) -> None:
         """Missing worktree with --worktree-base supplied → exit 7."""
-        from claude_fleet.cli import app  # noqa: PLC0415
+        from rookery.cli import app  # noqa: PLC0415
 
         db = self._db_path(tmp_path, "cli_retry_missing_wt.db")
         worktree_base = tmp_path / "worktrees"
@@ -248,7 +248,7 @@ class TestLandRetryCLI:
 
     def test_cli_job_not_found_exit_4(self, tmp_path: Path) -> None:
         """Non-existent job → exit 4."""
-        from claude_fleet.cli import app  # noqa: PLC0415
+        from rookery.cli import app  # noqa: PLC0415
 
         db = self._db_path(tmp_path, "cli_retry_notfound.db")
         # Create the DB (apply migrations) by opening an orch and closing it.

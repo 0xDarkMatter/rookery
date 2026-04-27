@@ -12,7 +12,7 @@ from pathlib import Path
 
 import pytest
 
-from claude_fleet.orchestrator import Orchestrator
+from rookery.orchestrator import Orchestrator
 
 
 def _force_expired_lease(orch: Orchestrator, job_id: str) -> None:

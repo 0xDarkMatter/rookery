@@ -1,4 +1,4 @@
-"""Tests for ``claude-fleet daemon-status``.
+"""Tests for ``rookery daemon-status``.
 
 Authoritative liveness check: pidfile -> psutil -> pm2 jlist (optional) ->
 recent-activity window. Exit code 0 when ALIVE, 1 when DEAD.
@@ -18,9 +18,9 @@ from pathlib import Path
 import pytest
 from typer.testing import CliRunner
 
-from claude_fleet.cli import app
-from claude_fleet.cli import daemon as daemon_mod
-from claude_fleet.orchestrator.orchestrator import Orchestrator
+from rookery.cli import app
+from rookery.cli import daemon as daemon_mod
+from rookery.orchestrator.orchestrator import Orchestrator
 
 
 @pytest.fixture()
@@ -274,7 +274,7 @@ def test_pm2_jlist_parses_matching_entry(
         [
             {"name": "unrelated", "pm2_env": {"status": "online"}},
             {
-                "name": "claude-fleet-daemon",
+                "name": "rookery-daemon",
                 "pm2_env": {"status": "online", "pm_uptime": 0},
             },
         ]
@@ -289,7 +289,7 @@ def test_pm2_jlist_parses_matching_entry(
 
     entry = daemon_mod._pm2_jlist()
     assert entry is not None
-    assert entry["name"] == "claude-fleet-daemon"
+    assert entry["name"] == "rookery-daemon"
 
 
 def test_pm2_jlist_returns_none_when_pm2_missing(

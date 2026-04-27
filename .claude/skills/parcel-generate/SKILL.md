@@ -9,7 +9,7 @@ metadata:
 
 # parcel-generate
 
-Bundled with **claude-fleet** and works against any claude-fleet project. The parcel prompt shape and `PARCEL_DONE.md` completion contract are documented in claude-fleet's README; this skill pairs with `claude-fleetd` (the orchestrator daemon) and `dsp-launch` (file-based, pre-queue) for the launch step. Originally extracted from Axiom but no longer Axiom-specific.
+Bundled with **rookery** and works against any rookery project. The parcel prompt shape and `PARCEL_DONE.md` completion contract are documented in rookery's README; this skill pairs with `rookery-daemon` (the orchestrator daemon) and `dsp-launch` (file-based, pre-queue) for the launch step. Originally extracted from Axiom but no longer Axiom-specific.
 
 Companion to the `dsp-launch` skill. Where `dsp-launch` covers the launch mechanics (worktrees, `claude -p`, watcher), this skill covers the upstream step: translating a project's per-parcel spec sections into self-contained prompt files that fresh headless sessions can execute.
 
@@ -167,21 +167,21 @@ If a prompt fails verification, iterate on the source spec (not the prompt) — 
 
 A `parcels/` directory with one `.md` file per parcel, each self-contained. Companion scripts/launchers live in `scripts/` (that's `dsp-launch`'s job, not this skill's).
 
-## Integration with dsp-launch and claude-fleetd
+## Integration with dsp-launch and rookery-daemon
 
-This skill produces the input that `dsp-launch` and `claude-fleetd` consume:
+This skill produces the input that `dsp-launch` and `rookery-daemon` consume:
 
 ```
 parcel-generate  →  parcels/P1.md … P13.md
                               ↓
-                       dsp-launch / claude-fleet   →   <worktrees_root>/P{1..13}/
+                       dsp-launch / rookery   →   <worktrees_root>/P{1..13}/
                               ↓
-                       claude -p sessions run (or dispatched via claude-fleetd)
+                       claude -p sessions run (or dispatched via rookery-daemon)
                               ↓
                        parcels/done/<PARCEL_ID>.md per worktree
 ```
 
-`<worktrees_root>` is the worktrees root directory configured in `claude-fleet.yaml` (default `./worktrees`).
+`<worktrees_root>` is the worktrees root directory configured in `rookery.yaml` (default `./worktrees`).
 
 ## Notes
 

@@ -11,7 +11,7 @@ from collections.abc import Callable
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from claude_fleet.orchestrator.backend import Job, OrchestratorBackend, WorkerHandle
+from rookery.orchestrator.backend import Job, OrchestratorBackend, WorkerHandle
 
 
 @dataclass

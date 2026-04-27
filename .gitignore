@@ -29,10 +29,16 @@ dist/
 .DS_Store
 Thumbs.db
 
-# claude-fleet runtime
+# rookery runtime
+rookery.db
+rookery.db-wal
+rookery.db-shm
+# legacy artifacts from before the v0.2.0 rename
 claude-fleet.db
 claude-fleet.db-wal
 claude-fleet.db-shm
+claude-fleet.yaml
+claude-fleet.pid
 worktrees/
 *.log
 logs/

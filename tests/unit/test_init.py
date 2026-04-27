@@ -1,4 +1,4 @@
-"""Unit tests for ``claude_fleet.init.cmd_init`` and the CLI ``init`` command."""
+"""Unit tests for ``rookery.init.cmd_init`` and the CLI ``init`` command."""
 
 from __future__ import annotations
 
@@ -9,9 +9,9 @@ import pytest
 import yaml
 from typer.testing import CliRunner
 
-from claude_fleet.cli import app
-from claude_fleet.init import InitError, cmd_init
-from claude_fleet.orchestrator.config import OrchestratorConfig
+from rookery.cli import app
+from rookery.init import InitError, cmd_init
+from rookery.orchestrator.config import OrchestratorConfig
 
 
 # ---------------------------------------------------------------------------
@@ -21,8 +21,8 @@ from claude_fleet.orchestrator.config import OrchestratorConfig
 
 def _all_created(target: Path) -> None:
     """Assert every artefact the spec requires exists under *target*."""
-    assert (target / "claude-fleet.yaml").is_file(), "claude-fleet.yaml missing"
-    assert (target / "claude-fleet.db").is_file(), "claude-fleet.db missing"
+    assert (target / "rookery.yaml").is_file(), "rookery.yaml missing"
+    assert (target / "rookery.db").is_file(), "rookery.db missing"
     assert (target / "parcels").is_dir(), "parcels/ missing"
     assert (target / "worktrees").is_dir(), "worktrees/ missing"
     assert (target / "worktrees" / ".gitignore").is_file(), "worktrees/.gitignore missing"
@@ -52,12 +52,12 @@ class TestFreshDirectory:
     def test_root_gitignore_entries(self, tmp_path: Path) -> None:
         cmd_init(target_dir=tmp_path)
         text = (tmp_path / ".gitignore").read_text()
-        for entry in ("claude-fleet.db", "claude-fleet.db-wal", "*.log", "worktrees/"):
+        for entry in ("rookery.db", "rookery.db-wal", "*.log", "worktrees/"):
             assert entry in text, f"missing gitignore entry: {entry}"
 
 
 class TestExistingConfig:
-    """If claude-fleet.yaml already exists, refuse unless --force."""
+    """If rookery.yaml already exists, refuse unless --force."""
 
     def test_refuses_without_force(self, tmp_path: Path) -> None:
         cmd_init(target_dir=tmp_path)
@@ -66,13 +66,13 @@ class TestExistingConfig:
 
     def test_does_not_modify_on_refusal(self, tmp_path: Path) -> None:
         cmd_init(target_dir=tmp_path)
-        original = (tmp_path / "claude-fleet.yaml").read_text()
+        original = (tmp_path / "rookery.yaml").read_text()
         # Write a sentinel so we can detect unwanted overwrite
-        (tmp_path / "claude-fleet.yaml").write_text("sentinel: true\n")
+        (tmp_path / "rookery.yaml").write_text("sentinel: true\n")
         with pytest.raises(InitError):
             cmd_init(target_dir=tmp_path, force=False)
         # File should still contain our sentinel
-        assert (tmp_path / "claude-fleet.yaml").read_text() == "sentinel: true\n"
+        assert (tmp_path / "rookery.yaml").read_text() == "sentinel: true\n"
 
 
 class TestForceOverwrite:
@@ -80,9 +80,9 @@ class TestForceOverwrite:
 
     def test_overwrites_yaml(self, tmp_path: Path) -> None:
         cmd_init(target_dir=tmp_path)
-        (tmp_path / "claude-fleet.yaml").write_text("sentinel: true\n")
+        (tmp_path / "rookery.yaml").write_text("sentinel: true\n")
         cmd_init(target_dir=tmp_path, force=True)
-        text = (tmp_path / "claude-fleet.yaml").read_text()
+        text = (tmp_path / "rookery.yaml").read_text()
         assert "sentinel" not in text
 
     def test_all_artefacts_still_present_after_force(self, tmp_path: Path) -> None:
@@ -101,13 +101,13 @@ class TestConfigValidation:
 
     def test_yaml_is_valid(self, tmp_path: Path) -> None:
         cmd_init(target_dir=tmp_path)
-        raw = (tmp_path / "claude-fleet.yaml").read_text()
+        raw = (tmp_path / "rookery.yaml").read_text()
         data = yaml.safe_load(raw)
         assert isinstance(data, dict), "top-level YAML must be a mapping"
 
     def test_config_model_validates(self, tmp_path: Path) -> None:
         cmd_init(target_dir=tmp_path)
-        raw = (tmp_path / "claude-fleet.yaml").read_text()
+        raw = (tmp_path / "rookery.yaml").read_text()
         data = yaml.safe_load(raw)
         # Drop keys that belong to the API doc but not the current model, then validate
         # We only validate against known model fields
@@ -127,7 +127,7 @@ class TestDatabaseMigrations:
 
     def test_migrations_table_populated(self, tmp_path: Path) -> None:
         cmd_init(target_dir=tmp_path)
-        db = tmp_path / "claude-fleet.db"
+        db = tmp_path / "rookery.db"
         conn = sqlite3.connect(str(db))
         try:
             rows = conn.execute(
@@ -139,7 +139,7 @@ class TestDatabaseMigrations:
 
     def test_db_file_created(self, tmp_path: Path) -> None:
         cmd_init(target_dir=tmp_path)
-        assert (tmp_path / "claude-fleet.db").stat().st_size > 0
+        assert (tmp_path / "rookery.db").stat().st_size > 0
 
 
 # ---------------------------------------------------------------------------
@@ -166,14 +166,14 @@ class TestGitignoreIdempotency:
         text = gitignore.read_text()
         assert "*.pyc" in text
         assert "__pycache__/" in text
-        assert "claude-fleet.db" in text
+        assert "rookery.db" in text
 
     def test_pre_existing_entry_not_duplicated(self, tmp_path: Path) -> None:
         gitignore = tmp_path / ".gitignore"
-        gitignore.write_text("claude-fleet.db\n", encoding="utf-8")
+        gitignore.write_text("rookery.db\n", encoding="utf-8")
         cmd_init(target_dir=tmp_path)
         lines = gitignore.read_text().splitlines()
-        count = lines.count("claude-fleet.db")
+        count = lines.count("rookery.db")
         assert count == 1, f"expected 1 occurrence, got {count}"
 
 
@@ -193,8 +193,8 @@ class TestCLI:
         monkeypatch.chdir(tmp_path)
         result = runner.invoke(app, ["init"])
         assert result.exit_code == 0, result.output
-        assert "claude-fleet.yaml" in result.output
-        assert "claude-fleet.db" in result.output
+        assert "rookery.yaml" in result.output
+        assert "rookery.db" in result.output
         _all_created(tmp_path)
 
     def test_refuses_if_exists(self, runner: CliRunner, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -206,7 +206,7 @@ class TestCLI:
     def test_force_flag_overwrites(self, runner: CliRunner, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.chdir(tmp_path)
         runner.invoke(app, ["init"])
-        (tmp_path / "claude-fleet.yaml").write_text("sentinel: true\n")
+        (tmp_path / "rookery.yaml").write_text("sentinel: true\n")
         result = runner.invoke(app, ["init", "--force"])
         assert result.exit_code == 0, result.output
-        assert "sentinel" not in (tmp_path / "claude-fleet.yaml").read_text()
+        assert "sentinel" not in (tmp_path / "rookery.yaml").read_text()

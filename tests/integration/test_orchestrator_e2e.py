@@ -13,8 +13,8 @@ from pathlib import Path
 
 import pytest
 
-from claude_fleet.orchestrator import Orchestrator
-from claude_fleet.orchestrator.daemon import Daemon
+from rookery.orchestrator import Orchestrator
+from rookery.orchestrator.daemon import Daemon
 from tests.unit.orchestrator.fakes import FakeBackend, FakeSpec
 
 pytestmark = pytest.mark.integration

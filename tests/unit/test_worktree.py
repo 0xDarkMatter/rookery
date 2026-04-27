@@ -1,4 +1,4 @@
-"""Unit tests for ``claude_fleet.worktree``.
+"""Unit tests for ``rookery.worktree``.
 
 All tests use a real git repository initialised in ``tmp_path`` so that
 ``git worktree add`` exercises genuine git mechanics rather than mocked
@@ -26,8 +26,8 @@ from pathlib import Path
 
 import pytest
 
-from claude_fleet.orchestrator.backend import Job
-from claude_fleet.worktree import GitWorktreeLifecycle, WorktreeLifecycle
+from rookery.orchestrator.backend import Job
+from rookery.worktree import GitWorktreeLifecycle, WorktreeLifecycle
 
 
 # ---------------------------------------------------------------------------

@@ -11,34 +11,34 @@ Prereqs:
 ## 1. Install
 
 ```bash
-git clone <claude-fleet-repo> claude-fleet
-cd claude-fleet
+git clone <rookery-repo> rookery
+cd rookery
 uv pip install -e .
 ```
 
 Verify:
 
 ```bash
-claude-fleet --help
-# Usage: claude-fleet [OPTIONS] COMMAND [ARGS]...
+rookery --help
+# Usage: rookery [OPTIONS] COMMAND [ARGS]...
 # ...
 ```
 
 ## 2. Initialise a project
 
-`claude-fleet init` is run inside the project you want managed (it can be the claude-fleet repo itself for a smoke test, or any other git repo).
+`rookery init` is run inside the project you want managed (it can be the rookery repo itself for a smoke test, or any other git repo).
 
 ```bash
 mkdir myproject && cd myproject
 git init -b main
-claude-fleet init
+rookery init
 ```
 
 Expected output:
 
 ```
-Created claude-fleet.yaml
-Created claude-fleet.db (schema v<N>)
+Created rookery.yaml
+Created rookery.db (schema v<N>)
 Created parcels/
 Created worktrees/.gitignore
 Updated .gitignore
@@ -48,18 +48,18 @@ Resulting layout:
 
 ```
 myproject/
-  claude-fleet.yaml      # config (db_path, max_workers, verdict adapter, ...)
-  claude-fleet.db        # SQLite state, WAL mode
+  rookery.yaml      # config (db_path, max_workers, verdict adapter, ...)
+  rookery.db        # SQLite state, WAL mode
   parcels/               # parcel markdown files live here by default
   worktrees/
     .gitignore           # ignores everything in this dir
-  .gitignore             # extended with claude-fleet entries
+  .gitignore             # extended with rookery entries
 ```
 
 ## 3. Scaffold a parcel
 
 ```bash
-claude-fleet parcel new hello-world
+rookery parcel new hello-world
 # Wrote parcels/hello-world.md
 ```
 
@@ -82,7 +82,7 @@ For the simplest possible parcel, copy `examples/01-hello-world/parcel.md` over 
 ## 4. Validate
 
 ```bash
-claude-fleet parcel validate parcels/hello-world.md
+rookery parcel validate parcels/hello-world.md
 # OK: parcels/hello-world.md
 ```
 
@@ -91,31 +91,31 @@ Use `--json` for scriptable output. Validation checks: frontmatter parses, `id` 
 ## 5. Enqueue
 
 ```bash
-claude-fleet enqueue hello-world
+rookery enqueue hello-world
 # Enqueued hello-world (priority=0, deps=[])
 ```
 
 Inspect:
 
 ```bash
-claude-fleet list
+rookery list
 # id           status   priority  deps  attempts
 # hello-world  pending  0         []    0/3
 
-claude-fleet status hello-world
+rookery status hello-world
 # {"id": "hello-world", "status": "pending", ...}
 
-claude-fleet summary
+rookery summary
 # pending  1
 # total    1
 ```
 
 ## 6. Start the daemon
 
-`claude-fleetd` runs the orchestrator tick loop in the foreground until SIGINT/SIGTERM. For a smoke test, run it in a second terminal:
+`rookery-daemon` runs the orchestrator tick loop in the foreground until SIGINT/SIGTERM. For a smoke test, run it in a second terminal:
 
 ```bash
-claude-fleetd
+rookery-daemon
 # [info] daemon starting; max_workers=4, tick_interval_s=5
 # [info] tick: claimed hello-world -> running
 # [info] worker spawned for hello-world (pid=<n>) in worktrees/hello-world
@@ -127,23 +127,23 @@ For background operation, put it under pm2 / systemd / docker. There is no built
 In another terminal, watch progress:
 
 ```bash
-claude-fleet summary
+rookery summary
 # running 1 / done 0 / failed 0
-claude-fleet daemon status
+rookery daemon status
 # alive (pid <n>)
 ```
 
 When the parcel finishes:
 
 ```bash
-claude-fleet status hello-world
+rookery status hello-world
 # {"id": "hello-world", "status": "done", "verdict": "PASS", ...}
 ```
 
 ## 7. Stop the daemon
 
 ```bash
-claude-fleet daemon stop
+rookery daemon stop
 # Sent SIGTERM to pid <n>
 ```
 
@@ -153,9 +153,9 @@ The daemon terminates running workers cleanly and flips their jobs back to `pend
 
 | Path | What |
 |---|---|
-| `claude-fleet.yaml` | Config (edit to taste) |
-| `claude-fleet.db` | SQLite state — `jobs`, `land_events`, etc. |
-| `claude-fleet.pid` | Daemon pidfile (override with `--pidfile`) |
+| `rookery.yaml` | Config (edit to taste) |
+| `rookery.db` | SQLite state — `jobs`, `land_events`, etc. |
+| `rookery.pid` | Daemon pidfile (override with `--pidfile`) |
 | `parcels/<id>.md` | Parcel prompt + frontmatter (one per job) |
 | `worktrees/<id>/` | Per-job git worktree, created on claim |
 | `worktrees/<id>/parcel.log` | Raw stdout/stderr from the worker's `claude -p` invocation |
@@ -164,12 +164,12 @@ The daemon terminates running workers cleanly and flips their jobs back to `pend
 
 ## Notes for this build
 
-- `claude-fleet doctor` is currently a stub printing TODO. Real preflight checks land in P6 (G7) — for now, manually verify the prereqs at the top of this doc.
-- Auto-land defaults to `false`. To exercise it, set `auto_land: true` in `claude-fleet.yaml` and provide `auto_land_test_cmd`.
-- `claude-fleetd --profiles a,b,c` rotates OAuth profiles round-robin across workers. Point claude-lb at this once it lands.
+- `rookery doctor` is currently a stub printing TODO. Real preflight checks land in P6 (G7) — for now, manually verify the prereqs at the top of this doc.
+- Auto-land defaults to `false`. To exercise it, set `auto_land: true` in `rookery.yaml` and provide `auto_land_test_cmd`.
+- `rookery-daemon --profiles a,b,c` rotates OAuth profiles round-robin across workers. Point claude-lb at this once it lands.
 
 ## Next
 
 - See `examples/02-with-deps/` for a two-parcel dependency example
 - See the README's Queue operations section for `cancel`, `requeue`, `reclaim`, and worktree management
-- Read `claude-fleet.yaml` — every field has a comment
+- Read `rookery.yaml` — every field has a comment

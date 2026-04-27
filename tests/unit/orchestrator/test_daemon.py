@@ -8,8 +8,8 @@ from pathlib import Path
 
 import pytest
 
-from claude_fleet.orchestrator import Orchestrator
-from claude_fleet.orchestrator.daemon import Daemon
+from rookery.orchestrator import Orchestrator
+from rookery.orchestrator.daemon import Daemon
 from tests.unit.orchestrator.fakes import FakeBackend, FakeSpec
 
 
@@ -174,7 +174,7 @@ async def test_safe_log_exception_swallows_unicode_encode_error(
 ) -> None:
     """Direct unit test of the safety wrapper: simulate a structlog writer
     that raises UnicodeEncodeError, confirm the call returns cleanly."""
-    from claude_fleet.orchestrator import daemon as daemon_mod
+    from rookery.orchestrator import daemon as daemon_mod
 
     def boom(*args: object, **kwargs: object) -> None:
         raise UnicodeEncodeError("charmap", "x", 0, 1, "test")

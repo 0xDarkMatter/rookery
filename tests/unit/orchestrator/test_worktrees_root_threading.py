@@ -5,7 +5,7 @@ Asserts:
   ``<config-dir>/custom-trees`` (not a hardcoded system temp path).
 - Yaml with an absolute path is honored as-is.
 - No yaml file (no --config) defaults to ``./worktrees`` relative to CWD,
-  NEVER to paths like ``../claude-fleet-worktrees``.
+  NEVER to paths like ``../rookery-worktrees``.
 """
 
 from __future__ import annotations
@@ -14,8 +14,8 @@ from pathlib import Path
 
 import pytest
 
-from claude_fleet.orchestrator.config import OrchestratorConfig, load_config
-from claude_fleet.worktree import GitWorktreeLifecycle
+from rookery.orchestrator.config import OrchestratorConfig, load_config
+from rookery.worktree import GitWorktreeLifecycle
 
 
 # ---------------------------------------------------------------------------
@@ -38,7 +38,7 @@ def test_relative_worktrees_root_resolves_to_config_dir(tmp_path: Path) -> None:
     """``worktrees_root: ./custom-trees`` anchors to the yaml directory."""
     config_dir = tmp_path / "project"
     config_dir.mkdir()
-    cfg_file = config_dir / "claude-fleet.yaml"
+    cfg_file = config_dir / "rookery.yaml"
     cfg_file.write_text("worktrees_root: ./custom-trees\n", encoding="utf-8")
 
     repo_root = tmp_path / "repo"
@@ -51,7 +51,7 @@ def test_relative_worktrees_root_resolves_to_config_dir(tmp_path: Path) -> None:
         f"lifecycle.base_dir should be {expected!r}, got {lifecycle.base_dir!r}"
     )
     # Verify the hardcoded fallback is NOT used
-    assert "claude-fleet-worktrees" not in str(lifecycle.base_dir)
+    assert "rookery-worktrees" not in str(lifecycle.base_dir)
 
 
 # ---------------------------------------------------------------------------
@@ -62,7 +62,7 @@ def test_relative_worktrees_root_resolves_to_config_dir(tmp_path: Path) -> None:
 def test_absolute_worktrees_root_honored_as_is(tmp_path: Path) -> None:
     """An absolute ``worktrees_root`` path passes through without alteration."""
     abs_root = tmp_path / "absolute" / "my-trees"
-    cfg_file = tmp_path / "claude-fleet.yaml"
+    cfg_file = tmp_path / "rookery.yaml"
     cfg_file.write_text(f"worktrees_root: {abs_root}\n", encoding="utf-8")
 
     repo_root = tmp_path / "repo"
@@ -76,14 +76,14 @@ def test_absolute_worktrees_root_honored_as_is(tmp_path: Path) -> None:
 
 
 # ---------------------------------------------------------------------------
-# Test 3 — no config file → default ./worktrees, NOT ../claude-fleet-worktrees
+# Test 3 — no config file → default ./worktrees, NOT ../rookery-worktrees
 # ---------------------------------------------------------------------------
 
 
 def test_no_config_defaults_to_cwd_worktrees(tmp_path: Path) -> None:
     """When no config file is provided, worktrees land in ``<repo_root>/worktrees``.
 
-    The legacy fallback ``<repo_root>/../claude-fleet-worktrees`` (from
+    The legacy fallback ``<repo_root>/../rookery-worktrees`` (from
     ``worktree_dir.repo_paths()``) must NOT be used.
     """
     repo_root = tmp_path / "myrepo"
@@ -96,7 +96,7 @@ def test_no_config_defaults_to_cwd_worktrees(tmp_path: Path) -> None:
         f"lifecycle.base_dir should be {expected!r}, got {lifecycle.base_dir!r}"
     )
     # The hardcoded fallback path must never appear
-    assert "claude-fleet-worktrees" not in str(lifecycle.base_dir)
+    assert "rookery-worktrees" not in str(lifecycle.base_dir)
     # Must not be a parent-level path
     assert lifecycle.base_dir.parent == repo_root, (
         "default worktrees dir should be a child of repo_root, not a sibling"
@@ -110,7 +110,7 @@ def test_no_config_defaults_to_cwd_worktrees(tmp_path: Path) -> None:
 
 def test_lifecycle_repo_root_matches_repo_root(tmp_path: Path) -> None:
     """GitWorktreeLifecycle.repo_root is the actual repo root (for git -C)."""
-    cfg_file = tmp_path / "claude-fleet.yaml"
+    cfg_file = tmp_path / "rookery.yaml"
     cfg_file.write_text("worktrees_root: ./wt\n", encoding="utf-8")
 
     repo_root = tmp_path / "the-repo"

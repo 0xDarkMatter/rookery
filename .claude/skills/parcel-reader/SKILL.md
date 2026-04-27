@@ -6,7 +6,7 @@ allowed-tools: "Read, Glob, Grep"
 
 # Parcel Reader
 
-Bundled with **claude-fleet** and works against any claude-fleet project — the `PARCEL_DONE.md` shape this skill parses is the public completion contract documented in claude-fleet's README, and the skill pairs with `claude-fleetd` (the orchestrator daemon) plus the rest of the parcel-* family (`parcel-audit`, `wave-triage`, `parcel-roster`). Originally extracted from Axiom but no longer Axiom-specific.
+Bundled with **rookery** and works against any rookery project — the `PARCEL_DONE.md` shape this skill parses is the public completion contract documented in rookery's README, and the skill pairs with `rookery-daemon` (the orchestrator daemon) plus the rest of the parcel-* family (`parcel-audit`, `wave-triage`, `parcel-roster`). Originally extracted from Axiom but no longer Axiom-specific.
 
 The canonical way to turn a `PARCEL_DONE.md` into labelled sections a caller can reason about. This skill does not summarise, rewrite, or score — it locates the file, identifies the standard sections by their headers, and hands each section back verbatim inside a structured block. Use it as a sub-step inside larger rituals (audit, wave-triage) whenever a parcel's own report is the source of truth.
 
@@ -27,7 +27,7 @@ The canonical way to turn a `PARCEL_DONE.md` into labelled sections a caller can
 
 ### Step 1 — Locate the file
 
-Given a parcel id, resolve the worktree path via Glob. `<worktrees_root>` is the worktrees root directory configured in `claude-fleet.yaml` (default `./worktrees`):
+Given a parcel id, resolve the worktree path via Glob. `<worktrees_root>` is the worktrees root directory configured in `rookery.yaml` (default `./worktrees`):
 
 ```
 <worktrees_root>/<id>/PARCEL_DONE.md
@@ -113,7 +113,7 @@ Sections not present in the file are omitted from the block — do not emit empt
 | Emit section bodies verbatim, not summarised | Downstream skills may need exact wording (test counts, commit hashes, file paths) |
 | Preserve the author's header text alongside the canonical label | Auditors need to know the real header to quote it back |
 | Do not invent sections that are not in the file | Absence is a valid signal; invention corrupts downstream reasoning |
-| Never extend the search outside the configured `<worktrees_root>` | That directory is the only canonical home for parcel worktrees in a claude-fleet project |
+| Never extend the search outside the configured `<worktrees_root>` | That directory is the only canonical home for parcel worktrees in a rookery project |
 
 ## Anti-patterns
 

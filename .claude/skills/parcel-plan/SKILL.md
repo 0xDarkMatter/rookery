@@ -6,7 +6,7 @@ allowed-tools: "Read, Glob, Grep"
 
 # Parcel Plan
 
-Bundled with **claude-fleet** and works against any claude-fleet project — the parcel format and worktree layout are documented in claude-fleet's README, and this skill pairs naturally with `claude-fleetd` (the orchestrator daemon) and the rest of the parcel-* family. It was originally extracted from the Axiom build but is no longer Axiom-specific.
+Bundled with **rookery** and works against any rookery project — the parcel format and worktree layout are documented in rookery's README, and this skill pairs naturally with `rookery-daemon` (the orchestrator daemon) and the rest of the parcel-* family. It was originally extracted from the Axiom build but is no longer Axiom-specific.
 
 The upstream companion to `parcel-generate`. Where `parcel-generate` takes a ready-made parcel breakdown and writes the prompt files, this skill takes a raw spec and produces the breakdown.
 
@@ -123,7 +123,7 @@ ORPHANS: <list or "none">
 
 The output of this skill is the direct input to `parcel-generate` Step 1–2. Downstream operator runs `parcel-generate` to turn each row into a committed `parcels/<id>.md` prompt file.
 
-Do not author the prompt files yourself — that is `parcel-generate`'s remit. Do not launch sessions — that is `dsp-launch` or `claude-fleet` (the queue-based dispatcher).
+Do not author the prompt files yourself — that is `parcel-generate`'s remit. Do not launch sessions — that is `dsp-launch` or `rookery` (the queue-based dispatcher).
 
 ## Hard rules
 

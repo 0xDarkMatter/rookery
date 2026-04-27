@@ -1,4 +1,4 @@
-"""Gate-by-gate tests for :mod:`claude_fleet.orchestrator.retire`.
+"""Gate-by-gate tests for :mod:`rookery.orchestrator.retire`.
 
 Each gate is driven deterministically by monkeypatching the module-level
 probe helpers. The happy-path test exercises the real ``git worktree
@@ -14,8 +14,8 @@ from pathlib import Path
 
 import pytest
 
-from claude_fleet.orchestrator import retire as retire_mod
-from claude_fleet.orchestrator.backend import Job
+from rookery.orchestrator import retire as retire_mod
+from rookery.orchestrator.backend import Job
 
 
 def _make_job(job_id: str = "W21-demo", *, status: str = "landed") -> Job:

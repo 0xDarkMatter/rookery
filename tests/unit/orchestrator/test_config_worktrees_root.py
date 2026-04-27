@@ -14,7 +14,7 @@ from pathlib import Path
 
 import pytest
 
-from claude_fleet.orchestrator.config import OrchestratorConfig, load_config
+from rookery.orchestrator.config import OrchestratorConfig, load_config
 
 
 # ---------------------------------------------------------------------------
@@ -25,7 +25,7 @@ from claude_fleet.orchestrator.config import OrchestratorConfig, load_config
 def test_load_config_worktrees_root_canonical(tmp_path: Path) -> None:
     """load_config() with worktrees_root: ./custom-trees resolves to absolute path."""
     yaml_text = "worktrees_root: ./custom-trees\n"
-    cfg_file = tmp_path / "claude-fleet.yaml"
+    cfg_file = tmp_path / "rookery.yaml"
     cfg_file.write_text(yaml_text, encoding="utf-8")
 
     cfg = load_config(cfg_file)
@@ -43,7 +43,7 @@ def test_load_config_worktrees_root_canonical(tmp_path: Path) -> None:
 def test_load_config_worktree_base_alias_accepted(tmp_path: Path) -> None:
     """load_config() accepts deprecated 'worktree_base', maps it to worktrees_root."""
     yaml_text = "worktree_base: ./legacy-trees\n"
-    cfg_file = tmp_path / "claude-fleet.yaml"
+    cfg_file = tmp_path / "rookery.yaml"
     cfg_file.write_text(yaml_text, encoding="utf-8")
 
     with warnings.catch_warnings(record=True) as caught:
@@ -79,7 +79,7 @@ def test_load_config_missing_file_returns_default(tmp_path: Path) -> None:
 def test_load_config_both_fields_canonical_wins(tmp_path: Path) -> None:
     """When both fields are set, worktrees_root wins and no warning is emitted."""
     yaml_text = "worktrees_root: ./canonical\nworktree_base: ./alias\n"
-    cfg_file = tmp_path / "claude-fleet.yaml"
+    cfg_file = tmp_path / "rookery.yaml"
     cfg_file.write_text(yaml_text, encoding="utf-8")
 
     with warnings.catch_warnings(record=True) as caught:

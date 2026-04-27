@@ -4,7 +4,7 @@
 
 [![Hackathon](https://img.shields.io/badge/Claude%20Opus%204.7-Hackathon-blueviolet?logo=anthropic)](https://www.anthropic.com/)
 
-_Formerly known as `claude-fleet` (renamed 2026-04-27). The Python package and CLI binaries still ship as `claude-fleet` — install instructions and command examples below reflect that._
+_Formerly known as `claude-fleet` (renamed 2026-04-27). As of v0.2.0 the Python package, PyPI distribution, and CLI binaries (`rookery` and `rookery-daemon`) all ship under the new name; env vars are `ROOKERY_*`, config files are `rookery.yaml` / `rookery.db`._
 
 **A job system for headless agent sessions.** Run dozens of unattended `claude -p` workers in parallel, each in its own git worktree, with dependency resolution, lease-based crash recovery, and optional auto-land on PASS verdicts. One worker per parcel, one parcel per worktree, one daemon per project.
 
@@ -13,12 +13,12 @@ _Formerly known as `claude-fleet` (renamed 2026-04-27). The Python package and C
 ![rookery](docs/assets/hackathon.gif)
 
 ```
-$ claude-fleet enqueue migrate-auth --deps schema
-$ claude-fleet enqueue add-oauth-flow --deps migrate-auth
-$ claude-fleetd                              # daemon picks them up
+$ rookery enqueue migrate-auth --deps schema
+$ rookery enqueue add-oauth-flow --deps migrate-auth
+$ rookery-daemon                              # daemon picks them up
 
 # Six hours later:
-$ claude-fleet summary
+$ rookery summary
 status      count
 ─────────  ──────
 landed       2
@@ -31,10 +31,14 @@ That's the whole shape. Throw markdown parcels at it, walk away, come back to me
 
 ## Recent Updates
 
+**v0.2.0** (April 2026) — **BREAKING**
+- 🪶 **Renamed `claude-fleet` → `rookery`.** PyPI package, Python imports (`from rookery...`), CLI binaries (`rookery`, `rookery-daemon`), config files (`rookery.yaml`, `rookery.db`, `rookery.pid`), and env vars (`ROOKERY_*`) all use the new name. Hard switch — no fallback. See [CHANGELOG](CHANGELOG.md) for migration steps.
+- ✨ **Auto-commit on PASS verdict.** Daemon now stages and commits any unstaged work in the parcel worktree after a `PASS` / `PASS_WITH_WARNINGS` verdict so `auto_land` (and manual merge) have a HEAD to fast-forward. Opt out via `auto_commit_on_pass: false`.
+
 **v0.1.0** (April 2026)
 - 🚀 **Initial extraction** - Lifted ~7,500 LOC from `axiom`'s orchestrator by a single headless `claude -p` session running unattended against six pages of spec docs. The build itself was a DSP wave — phases P0–P8 as sub-parcels coordinated by the very state machine the codebase now exposes as a library. 204 tests green on first run. MIT, Python 3.12+, cross-platform (Linux, macOS, Windows).
 
-[View full changelog →](https://github.com/0xDarkMatter/claude-fleet/commits/main)
+[View full changelog →](https://github.com/0xDarkMatter/rookery/commits/main)
 
 ## Why this exists
 
@@ -46,7 +50,7 @@ Every other parallel-Claude tool today is one of three shapes:
 | LangGraph, CrewAI | Workflow library | Worktree isolation. Auto-land. State persistence. |
 | `for f in *.md; do claude -p < $f; done` | Shell loop | Dependencies. Retries. Anything if it dies. |
 
-`claude-fleet` is a fourth shape: a **job system** specialised for headless agent sessions, where the worktree is the isolation unit and the daemon survives operator absence. Closest analogue is `make` + `git worktree` + a job queue + a CI runner, fused.
+`rookery` is a fourth shape: a **job system** specialised for headless agent sessions, where the worktree is the isolation unit and the daemon survives operator absence. Closest analogue is `make` + `git worktree` + a job queue + a CI runner, fused.
 
 ## The trilogy
 
@@ -55,14 +59,14 @@ Every other parallel-Claude tool today is one of three shapes:
 │ axiom            ← multi-agent benchmarking app      │
 │   uses ↓                                             │
 ├─────────────────────────────────────────────────────┤
-│ claude-fleet     ← runtime: queue + daemon + worktrees   ◀── you are here
+│ rookery     ← runtime: queue + daemon + worktrees   ◀── you are here
 │   uses ↓ (optional)                                  │
 ├─────────────────────────────────────────────────────┤
 │ claude-lb        ← OAuth profile rotation            │
 └─────────────────────────────────────────────────────┘
 ```
 
-Each layer is independently useful. Use claude-fleet alone for single-account local builds. Layer claude-lb under it when you need to fan out across multiple Max plans. Build something axiom-shaped on top when you need agent topology + skill libraries.
+Each layer is independently useful. Use rookery alone for single-account local builds. Layer claude-lb under it when you need to fan out across multiple Max plans. Build something axiom-shaped on top when you need agent topology + skill libraries.
 
 ## Quickstart (greenfield — 60 seconds)
 
@@ -70,21 +74,21 @@ Each layer is independently useful. Use claude-fleet alone for single-account lo
 mkdir my-fleet && cd my-fleet
 git init -b main && git commit --allow-empty -m init
 
-uv pip install claude-fleet
-claude-fleet init           # scaffolds yaml, db, parcels/, worktrees/
-claude-fleet doctor         # verifies env, claude binary, OAuth, git
+uv pip install rookery
+rookery init           # scaffolds yaml, db, parcels/, worktrees/
+rookery doctor         # verifies env, claude binary, OAuth, git
 
-claude-fleet parcel new hello-world
+rookery parcel new hello-world
 # edit parcels/hello-world.md — describe the task
 
-claude-fleet enqueue hello-world
-claude-fleetd               # foreground daemon; Ctrl-C to stop
+rookery enqueue hello-world
+rookery-daemon               # foreground daemon; Ctrl-C to stop
 ```
 
 In another terminal:
 
 ```bash
-claude-fleet status hello-world
+rookery status hello-world
 # ... watch it move pending → claimed → running → done
 ```
 
@@ -92,9 +96,9 @@ Five-minute walkthrough: [docs/QUICKSTART.md](docs/QUICKSTART.md).
 
 ## Adapting to an existing repo
 
-`claude-fleet` is happiest in greenfield projects, but it works fine alongside an existing codebase. We extracted it *from* `axiom`, a sibling project that uses this same orchestrator pattern internally. The retrofit recipe:
+`rookery` is happiest in greenfield projects, but it works fine alongside an existing codebase. We extracted it *from* `axiom`, a sibling project that uses this same orchestrator pattern internally. The retrofit recipe:
 
-1. **`claude-fleet init`** in the repo root — it only writes new files (`claude-fleet.yaml`, `claude-fleet.db`, `parcels/`, `worktrees/.gitignore`). Adds five lines to `.gitignore`. Touches nothing else.
+1. **`rookery init`** in the repo root — it only writes new files (`rookery.yaml`, `rookery.db`, `parcels/`, `worktrees/.gitignore`). Adds five lines to `.gitignore`. Touches nothing else.
 2. **Pick narrow first targets.** Good first parcels: dependency upgrades, lint cleanups, test scaffolding for a leaf module, codemods. Bad first parcels: anything that touches the build system, anything with cross-cutting refactors, anything where the contract between agents isn't already locked down.
 3. **Pin `auto_land: false` initially.** Watch verdicts, eyeball the diffs, merge by hand. Flip to `auto_land: true` per-parcel once you trust the test signal.
 4. **Use `--deps` to gate by file scope.** Two parcels editing the same module = chain them. Two parcels editing different modules = run them concurrently. Worktree isolation prevents most stomping but not all.
@@ -142,34 +146,34 @@ The default verdict adapter (`marker-file`) reads the first `Verdict:` line. Val
 ## Daemon control
 
 ```bash
-claude-fleetd                                # foreground; canonical pm2/systemd target
-claude-fleetd --profiles max-1,max-2,max-3   # round-robin OAuth profiles
+rookery-daemon                                # foreground; canonical pm2/systemd target
+rookery-daemon --profiles max-1,max-2,max-3   # round-robin OAuth profiles
 
-claude-fleet daemon-status                   # liveness via pidfile
-claude-fleet daemon-stop                     # SIGTERM
+rookery daemon-status                   # liveness via pidfile
+rookery daemon-stop                     # SIGTERM
 ```
 
-Daemon writes its pid to `claude-fleet.pid`. On shutdown it terminates child workers and flips their jobs back to `pending` so the next start picks them up. Crash mid-job? Lease expires after 30 min, job returns to `pending`, retry counter increments. Three failed attempts → `blocked` (operator-only recovery via `requeue`).
+Daemon writes its pid to `rookery.pid`. On shutdown it terminates child workers and flips their jobs back to `pending` so the next start picks them up. Crash mid-job? Lease expires after 30 min, job returns to `pending`, retry counter increments. Three failed attempts → `blocked` (operator-only recovery via `requeue`).
 
 ## Queue operations
 
 ```bash
-claude-fleet enqueue <id> [--deps a,b] [--priority N] [--no-verify]
-claude-fleet list [--status pending|running|done|failed|blocked|all]
-claude-fleet status <id> [--json]
-claude-fleet summary [--json]
+rookery enqueue <id> [--deps a,b] [--priority N] [--no-verify]
+rookery list [--status pending|running|done|failed|blocked|all]
+rookery status <id> [--json]
+rookery summary [--json]
 
-claude-fleet cancel <id>           # -> failed (terminal)
-claude-fleet requeue <id>          # blocked/failed -> pending, attempts reset
-claude-fleet reclaim               # one-shot expired-lease sweep
+rookery cancel <id>           # -> failed (terminal)
+rookery requeue <id>          # blocked/failed -> pending, attempts reset
+rookery reclaim               # one-shot expired-lease sweep
 
-claude-fleet land <id>             # manual land of a PASS'd job
-claude-fleet land retry <id>       # retry a merge-blocked land
-claude-fleet land history <id>     # land_events rows for a job
+rookery land <id>             # manual land of a PASS'd job
+rookery land retry <id>       # retry a merge-blocked land
+rookery land history <id>     # land_events rows for a job
 
-claude-fleet worktree list
-claude-fleet worktree retire <id>
-claude-fleet worktree sweep [--dry-run]
+rookery worktree list
+rookery worktree retire <id>
+rookery worktree sweep [--dry-run]
 ```
 
 ## State machine
@@ -199,7 +203,7 @@ Every transition writes a row to SQLite (`jobs` table) and emits a JSON line to 
 | `VerdictAdapter` | `MarkerFileAdapter` (reads `PARCEL_DONE-<id>.md`) | `ExitCodeAdapter`, `JsonResultAdapter`, or your own |
 | `WorktreeLifecycle` | `GitWorktreeLifecycle` | Override for non-git or container-backed isolation |
 | `Notifier` | `LogNotifier` | Hook to pigeon, slack, webhooks for `parcel_landed`/`merge_blocked`/`lease_expired` |
-| Profile selector | env-var (`CLAUDE_FLEET_PROFILES`) round-robin | `[lb]` extra delegates to `claude-lb` |
+| Profile selector | env-var (`ROOKERY_PROFILES`) round-robin | `[lb]` extra delegates to `claude-lb` |
 
 [docs/INTEGRATIONS.md](docs/INTEGRATIONS.md) walks through wiring each.
 
@@ -235,7 +239,7 @@ That's a real DSP run, with real verdicts, against the very pattern the codebase
 ### By the numbers
 
 - **204 unit + integration tests** lifted from axiom, all green on first run
-- **~7,500 LOC** in `src/claude_fleet/`
+- **~7,500 LOC** in `src/rookery/`
 - **Extracted from sibling project `axiom`** — same orchestrator pattern used internally
 - **MIT licensed**, Python 3.12+
 - **Cross-platform** — Linux, macOS, Windows (including the NTFS worktree quirks)

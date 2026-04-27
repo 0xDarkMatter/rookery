@@ -18,8 +18,8 @@ from typing import Any
 
 import pytest
 
-from claude_fleet.orchestrator.backend import Job
-from claude_fleet.platform.headless_spawn import SpawnResult
+from rookery.orchestrator.backend import Job
+from rookery.platform.headless_spawn import SpawnResult
 
 IS_WINDOWS = sys.platform == "win32"
 
@@ -104,36 +104,36 @@ def backend(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
         )
 
     monkeypatch.setattr(
-        "claude_fleet.orchestrator.worker_backend.find_parcel_prompt",
+        "rookery.orchestrator.worker_backend.find_parcel_prompt",
         fake_find_parcel_prompt,
     )
     monkeypatch.setattr(
-        "claude_fleet.orchestrator.worker_backend.ensure_worktree",
+        "rookery.orchestrator.worker_backend.ensure_worktree",
         fake_ensure_worktree,
     )
     monkeypatch.setattr(
-        "claude_fleet.orchestrator.worker_backend.spawn_headless_claude",
+        "rookery.orchestrator.worker_backend.spawn_headless_claude",
         fake_spawn_headless_claude,
     )
     # Stub claude-lb so tests don't shell out to the real CLI on every spawn.
     monkeypatch.setattr(
-        "claude_fleet.orchestrator.worker_backend.claude_lb.refresh_expired",
+        "rookery.orchestrator.worker_backend.claude_lb.refresh_expired",
         lambda: None,
     )
     monkeypatch.setattr(
-        "claude_fleet.orchestrator.worker_backend.claude_lb.pick_profile",
+        "rookery.orchestrator.worker_backend.claude_lb.pick_profile",
         lambda **_kw: None,
     )
     monkeypatch.setattr(
-        "claude_fleet.orchestrator.worker_backend.claude_lb.resolve_config_dir",
+        "rookery.orchestrator.worker_backend.claude_lb.resolve_config_dir",
         lambda _p: None,
     )
     monkeypatch.setattr(
-        "claude_fleet.orchestrator.worker_backend.claude_lb.bin_dir",
+        "rookery.orchestrator.worker_backend.claude_lb.bin_dir",
         lambda: None,
     )
 
-    from claude_fleet.orchestrator.worker_backend import WorkerBackend
+    from rookery.orchestrator.worker_backend import WorkerBackend
 
     return WorkerBackend(
         repo_root=repo_root,
@@ -247,7 +247,7 @@ async def test_terminate_kills_worker(backend) -> None:
 
 
 async def test_spawn_refuses_when_api_key_present(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    from claude_fleet.orchestrator.worker_backend import WorkerBackend
+    from rookery.orchestrator.worker_backend import WorkerBackend
 
     repo_root = tmp_path / "repo"
     repo_root.mkdir()
@@ -267,7 +267,7 @@ async def test_spawn_refuses_when_api_key_present(tmp_path: Path, monkeypatch: p
 
 async def test_spawn_failure_surfaces_as_runtime_error(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     """If the platform spawn raises, WorkerBackend wraps it in RuntimeError."""
-    from claude_fleet.orchestrator.worker_backend import WorkerBackend
+    from rookery.orchestrator.worker_backend import WorkerBackend
 
     repo_root = tmp_path / "repo"
     repo_root.mkdir()
@@ -288,9 +288,9 @@ async def test_spawn_failure_surfaces_as_runtime_error(tmp_path: Path, monkeypat
     def boom(**_kwargs):
         raise OSError("synthetic spawn failure")
 
-    monkeypatch.setattr("claude_fleet.orchestrator.worker_backend.find_parcel_prompt", fake_find)
-    monkeypatch.setattr("claude_fleet.orchestrator.worker_backend.ensure_worktree", fake_ensure)
-    monkeypatch.setattr("claude_fleet.orchestrator.worker_backend.spawn_headless_claude", boom)
+    monkeypatch.setattr("rookery.orchestrator.worker_backend.find_parcel_prompt", fake_find)
+    monkeypatch.setattr("rookery.orchestrator.worker_backend.ensure_worktree", fake_ensure)
+    monkeypatch.setattr("rookery.orchestrator.worker_backend.spawn_headless_claude", boom)
 
     backend = WorkerBackend(
         repo_root=repo_root,
@@ -307,7 +307,7 @@ async def test_spawn_failure_surfaces_as_runtime_error(tmp_path: Path, monkeypat
 
 async def test_spawn_missing_prompt_surfaces_as_runtime_error(tmp_path: Path) -> None:
     """Typo'd job id → find_parcel_prompt raises → WorkerBackend wraps."""
-    from claude_fleet.orchestrator.worker_backend import WorkerBackend
+    from rookery.orchestrator.worker_backend import WorkerBackend
 
     repo_root = tmp_path / "repo"
     repo_root.mkdir()
@@ -332,7 +332,7 @@ async def test_spawn_missing_prompt_surfaces_as_runtime_error(tmp_path: Path) ->
 def test_augment_windows_path_prepends_claude_or_git_bin() -> None:
     """Bare PATH (as pm2/Task Scheduler daemons inherit) should get claude
     bin dir and/or Git POSIX utility dirs prepended."""
-    from claude_fleet.orchestrator.worker_backend import _augment_windows_path
+    from rookery.orchestrator.worker_backend import _augment_windows_path
 
     bare_path = r"C:\Windows\System32;C:\Windows"
     augmented = _augment_windows_path(bare_path)
@@ -354,25 +354,25 @@ def test_augment_windows_path_prepends_claude_or_git_bin() -> None:
 
 @pytest.mark.skipif(sys.platform != "win32", reason="Windows-only profile resolution")
 def test_resolve_claude_config_dir_env_override(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
-    """CLAUDE_FLEET_CONFIG_DIR wins over profile arg."""
-    from claude_fleet.orchestrator.worker_backend import _resolve_claude_config_dir
+    """ROOKERY_CONFIG_DIR wins over profile arg."""
+    from rookery.orchestrator.worker_backend import _resolve_claude_config_dir
 
     override = tmp_path / "custom-profile"
     override.mkdir()
-    monkeypatch.setenv("CLAUDE_FLEET_CONFIG_DIR", str(override))
+    monkeypatch.setenv("ROOKERY_CONFIG_DIR", str(override))
 
     assert _resolve_claude_config_dir("mknv74") == str(override)
 
 
 @pytest.mark.skipif(sys.platform != "win32", reason="Windows-only profile resolution")
 def test_resolve_claude_config_dir_profile_env_override(monkeypatch: pytest.MonkeyPatch) -> None:
-    """CLAUDE_FLEET_PROFILE overrides the profile arg; resolves via C:\\Users\\* scan."""
-    from claude_fleet.orchestrator.worker_backend import _resolve_claude_config_dir
+    """ROOKERY_PROFILE overrides the profile arg; resolves via C:\\Users\\* scan."""
+    from rookery.orchestrator.worker_backend import _resolve_claude_config_dir
 
-    monkeypatch.delenv("CLAUDE_FLEET_CONFIG_DIR", raising=False)
-    monkeypatch.setenv("CLAUDE_FLEET_PROFILE", "mknv74")
+    monkeypatch.delenv("ROOKERY_CONFIG_DIR", raising=False)
+    monkeypatch.setenv("ROOKERY_PROFILE", "mknv74")
 
-    result = _resolve_claude_config_dir("roamhq")  # CLAUDE_FLEET_PROFILE wins
+    result = _resolve_claude_config_dir("roamhq")  # ROOKERY_PROFILE wins
     # Result should be an mknv74 profile dir, if one exists on this machine.
     if result is not None:
         assert result.endswith("mknv74")
@@ -382,7 +382,7 @@ async def test_next_profile_delegates_to_claude_lb(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """When claude-lb returns a profile, WorkerBackend uses it (not the ring)."""
-    from claude_fleet.orchestrator.worker_backend import WorkerBackend
+    from rookery.orchestrator.worker_backend import WorkerBackend
 
     repo_root = tmp_path / "repo"
     repo_root.mkdir()
@@ -391,7 +391,7 @@ async def test_next_profile_delegates_to_claude_lb(
 
     # claude-lb picks "evolution7" regardless of config default "mknv74".
     monkeypatch.setattr(
-        "claude_fleet.orchestrator.worker_backend.claude_lb.pick_profile",
+        "rookery.orchestrator.worker_backend.claude_lb.pick_profile",
         lambda **_kw: "evolution7",
     )
 
@@ -408,7 +408,7 @@ async def test_next_profile_falls_back_when_claude_lb_unavailable(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """When claude-lb returns None, WorkerBackend uses its ring / default."""
-    from claude_fleet.orchestrator.worker_backend import WorkerBackend
+    from rookery.orchestrator.worker_backend import WorkerBackend
 
     repo_root = tmp_path / "repo"
     repo_root.mkdir()
@@ -416,7 +416,7 @@ async def test_next_profile_falls_back_when_claude_lb_unavailable(
     worktrees_root.mkdir()
 
     monkeypatch.setattr(
-        "claude_fleet.orchestrator.worker_backend.claude_lb.pick_profile",
+        "rookery.orchestrator.worker_backend.claude_lb.pick_profile",
         lambda **_kw: None,
     )
 
@@ -433,15 +433,15 @@ def test_resolve_config_dir_prefers_claude_lb(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """When claude-lb resolves a dir for the profile, it wins over C:\\Users scan."""
-    from claude_fleet.orchestrator.worker_backend import _resolve_claude_config_dir
+    from rookery.orchestrator.worker_backend import _resolve_claude_config_dir
 
     expected = tmp_path / "fake-roamhq"
     expected.mkdir()
 
-    monkeypatch.delenv("CLAUDE_FLEET_CONFIG_DIR", raising=False)
-    monkeypatch.delenv("CLAUDE_FLEET_PROFILE", raising=False)
+    monkeypatch.delenv("ROOKERY_CONFIG_DIR", raising=False)
+    monkeypatch.delenv("ROOKERY_PROFILE", raising=False)
     monkeypatch.setattr(
-        "claude_fleet.orchestrator.worker_backend.claude_lb.resolve_config_dir",
+        "rookery.orchestrator.worker_backend.claude_lb.resolve_config_dir",
         lambda _p: str(expected),
     )
 
@@ -451,7 +451,7 @@ def test_resolve_config_dir_prefers_claude_lb(
 @pytest.mark.skipif(sys.platform != "win32", reason="Windows-only PATH fix")
 def test_augment_windows_path_is_idempotent() -> None:
     """Re-augmenting an already-augmented PATH must not duplicate entries."""
-    from claude_fleet.orchestrator.worker_backend import _augment_windows_path
+    from rookery.orchestrator.worker_backend import _augment_windows_path
 
     once = _augment_windows_path("")
     twice = _augment_windows_path(once)
