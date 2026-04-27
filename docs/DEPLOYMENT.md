@@ -96,5 +96,11 @@ The container needs persistent storage for `rookery.db`, `worktrees/`, and the O
 
 - **Graceful shutdown**: SIGTERM finishes the current tick, signals workers, waits up to `shutdown_grace_s` (default 30s), then flips in-flight jobs back to `pending` so the next start picks them up.
 - **Lease reclaim**: stale leases auto-recover on the next tick; `rookery reclaim` forces a sweep.
-- **Health**: `rookery daemon-status` tails the pidfile + db heartbeat.
-- **Failure modes + recovery**: see the table at the bottom of [BUILD_PLAN](https://github.com/0xDarkMatter/rookery/blob/main/docs/BUILD_PLAN.md) (Windows worktree quirks, lease expiry, locked-file teardown, etc.).
+- **Health**: `rookery daemon-status` reads the pidfile + db heartbeat (use this in load-balancer health checks).
+- **Auto-commit on PASS**: when a parcel finishes with `PASS`/`PASS_WITH_WARNINGS` and leaves unstaged changes, the daemon stages and commits with a `feat(<parcel-id>): <summary>` message before transitioning the job to `done`. The commit is local to the worktree — `auto_land` (or a manual `git merge`) is what brings it onto `main`. Disable per-deployment with `auto_commit_on_pass: false` in `rookery.yaml` if your workers always commit themselves.
+- **Working directory matters**: pm2 / systemd / docker MUST start the daemon with the correct `cwd` (the project directory). Relative paths in `rookery.yaml` (e.g. `worktrees_root: ./worktrees`) are resolved relative to the **config file's directory** at load time, but `db_path` and the pidfile resolve against the daemon's CWD. Use absolute paths in `rookery.yaml` if your supervisor's working directory is unstable.
+- **Env vars**: `ROOKERY_CONFIG`, `ROOKERY_DB`, `ROOKERY_PROFILES`, `ROOKERY_PIDFILE` override CLI flags via Typer's `envvar=` wiring — pass them through pm2 `env: {...}`, the systemd `Environment=` directive, or `docker run -e`.
+- **Failure modes + recovery**: see the README's State machine section + Auto-commit on PASS for the canonical transitions. Common gotchas:
+  - Windows worktree teardown can fail under file-locks — daemon retries up to 3× with 1 s back-off
+  - Lease expiry returns claimed jobs to `pending`; the retry counter increments on each lease cycle
+  - Three failed attempts → `blocked` (operator-only recovery via `rookery requeue <id>`)

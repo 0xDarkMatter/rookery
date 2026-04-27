@@ -34,6 +34,10 @@ That's the whole shape. Throw markdown parcels at it, walk away, come back to me
 **v0.2.0** (April 2026) — **BREAKING**
 - 🪶 **Renamed `claude-fleet` → `rookery`.** PyPI package, Python imports (`from rookery...`), CLI binaries (`rookery`, `rookery-daemon`), config files (`rookery.yaml`, `rookery.db`, `rookery.pid`), and env vars (`ROOKERY_*`) all use the new name. Hard switch — no fallback. See [CHANGELOG](CHANGELOG.md) for migration steps.
 - ✨ **Auto-commit on PASS verdict.** Daemon now stages and commits any unstaged work in the parcel worktree after a `PASS` / `PASS_WITH_WARNINGS` verdict so `auto_land` (and manual merge) have a HEAD to fast-forward. Opt out via `auto_commit_on_pass: false`.
+- 🔢 **`rookery --version` / `-V`** flag (reads from `importlib.metadata`).
+- 📐 **Relative `worktrees_root` resolution** anchored to the config file's directory — pm2 / systemd setups starting the daemon from a different CWD now resolve worktree paths correctly.
+- 🤖 **[AGENTS.md](AGENTS.md)** — guide for AI assistants editing the rookery codebase.
+- 🧹 **Lint hygiene**: `ruff check src/ tests/` now clean; sane ignores for the chronic intentional patterns.
 
 **v0.1.0** (April 2026)
 - 🚀 **Initial extraction** - Lifted ~7,500 LOC from `axiom`'s orchestrator by a single headless `claude -p` session running unattended against six pages of spec docs. The build itself was a DSP wave — phases P0–P8 as sub-parcels coordinated by the very state machine the codebase now exposes as a library. 204 tests green on first run. MIT, Python 3.12+, cross-platform (Linux, macOS, Windows).
@@ -75,6 +79,7 @@ mkdir my-fleet && cd my-fleet
 git init -b main && git commit --allow-empty -m init
 
 uv pip install rookery
+rookery --version      # confirm install (e.g. "rookery 0.2.0")
 rookery init           # scaffolds yaml, db, parcels/, worktrees/
 rookery doctor         # verifies env, claude binary, OAuth, git
 
@@ -141,7 +146,7 @@ When you finish, write `PARCEL_DONE-add-oauth-flow.md` at the worktree root:
     <one paragraph>
 ```
 
-The default verdict adapter (`marker-file`) reads the first `Verdict:` line. Values: `PASS`, `PASS_WITH_WARNINGS`, `BLOCK`, `UNKNOWN`. Other built-ins: `exit-code`, `json-result`. Or implement `VerdictAdapter` for your own. Full reference: [docs/PARCEL_FORMAT.md](docs/PARCEL_FORMAT.md).
+The default verdict adapter (`marker-file`) reads the first `Verdict:` line. Values: `PASS`, `PASS_WITH_WARNINGS`, `BLOCK`, `UNKNOWN`. Other built-ins: `exit-code`, `json-result`. Or implement `VerdictAdapter` for your own.
 
 ## Daemon control
 
@@ -195,6 +200,30 @@ rookery worktree sweep [--dry-run]
 
 Every transition writes a row to SQLite (`jobs` table) and emits a JSON line to the daemon log. The whole machine survives daemon restart — `BEGIN IMMEDIATE` plus WAL mode means two daemons can't claim the same job and a crash never loses state.
 
+## Auto-commit on PASS
+
+When a worker emits a `PASS` or `PASS_WITH_WARNINGS` verdict, the daemon stages and commits any unstaged work in the parcel worktree before transitioning the job to `done`. This guarantees the parcel branch HEAD advances so `auto_land` (and manual `git merge`) have something to fast-forward — without it, a worker that finishes its task but forgets to commit leaves the branch empty and the land flow has nothing to merge.
+
+The commit subject is derived from the parcel-done `## Summary` section (truncated to 72 chars) with the parcel id as the conventional-commit scope:
+
+```
+feat(<parcel-id>): <first non-empty line under ## Summary>
+```
+
+Disable per-deployment with `auto_commit_on_pass: false` in `rookery.yaml` if you'd rather have the worker be solely responsible for committing.
+
+Skipped automatically when the worker already committed (`git diff --cached --quiet` returns 0). Failures are logged as `orchestrator.daemon.auto_commit_failed` and recorded on the job's `last_error`, but **do not block** the verdict transition — a successful parcel still goes to `done` even if auto-commit can't run.
+
+## Configuration paths
+
+`rookery.yaml` keys are read in this resolution order:
+1. Explicit CLI flag (e.g. `--config <path>`, `--db <path>`)
+2. Env var (`ROOKERY_CONFIG`, `ROOKERY_DB`, `ROOKERY_PROFILES`, `ROOKERY_PIDFILE`)
+3. YAML file value (with `worktree_base` → `worktrees_root` alias preserved for migration)
+4. Hard-coded defaults (`./rookery.yaml`, `./rookery.db`, `./rookery.pid`, `./worktrees`)
+
+`worktrees_root: ./worktrees` in `rookery.yaml` is anchored to the **config file's directory**, not the daemon's CWD — important when pm2 / systemd starts the daemon from a different working directory.
+
 ## Pluggable
 
 | Interface | Default | Custom |
@@ -205,7 +234,7 @@ Every transition writes a row to SQLite (`jobs` table) and emits a JSON line to 
 | `Notifier` | `LogNotifier` | Hook to pigeon, slack, webhooks for `parcel_landed`/`merge_blocked`/`lease_expired` |
 | Profile selector | env-var (`ROOKERY_PROFILES`) round-robin | `[lb]` extra delegates to `claude-lb` |
 
-[docs/INTEGRATIONS.md](docs/INTEGRATIONS.md) walks through wiring each.
+Each interface is a small ABC with a single concrete default. The wiring point is constructor injection in `src/rookery/orchestrator/__main__.py` — see [AGENTS.md](AGENTS.md) for adding-a-feature recipes.
 
 ## Receipts
 
@@ -247,11 +276,12 @@ That's a real DSP run, with real verdicts, against the very pattern the codebase
 ## Where to read more
 
 - [docs/QUICKSTART.md](docs/QUICKSTART.md) — five-minute walkthrough
-- [docs/PARCEL_FORMAT.md](docs/PARCEL_FORMAT.md) — the public contract
-- [docs/INTEGRATIONS.md](docs/INTEGRATIONS.md) — claude-lb, custom backends, custom adapters
 - [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md) — pm2, systemd, docker examples
+- [AGENTS.md](AGENTS.md) — guide for AI assistants editing the rookery codebase
 - [examples/](examples/) — runnable parcel examples (`01-hello-world`, `02-with-deps`)
-- [CHANGELOG.md](CHANGELOG.md)
+- [CHANGELOG.md](CHANGELOG.md) — release notes (v0.1.0, v0.2.0)
+
+The parcel format and pluggable interfaces are documented inline in this README — the [Parcel format](#parcel-format) and [Pluggable](#pluggable) sections above are the canonical reference. Standalone `docs/PARCEL_FORMAT.md` / `docs/INTEGRATIONS.md` are planned for v0.3.
 
 ## License
 

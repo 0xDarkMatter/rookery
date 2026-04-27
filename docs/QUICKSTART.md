@@ -19,6 +19,9 @@ uv pip install -e .
 Verify:
 
 ```bash
+rookery --version
+# rookery 0.2.0
+
 rookery --help
 # Usage: rookery [OPTIONS] COMMAND [ARGS]...
 # ...
@@ -129,7 +132,7 @@ In another terminal, watch progress:
 ```bash
 rookery summary
 # running 1 / done 0 / failed 0
-rookery daemon status
+rookery daemon-status
 # alive (pid <n>)
 ```
 
@@ -140,10 +143,12 @@ rookery status hello-world
 # {"id": "hello-world", "status": "done", "verdict": "PASS", ...}
 ```
 
+If the worker emitted `Verdict: PASS` and left unstaged changes in the worktree, the daemon **automatically commits** them with a `feat(<parcel-id>): <summary>` message before flipping the job to `done`. This guarantees the parcel branch HEAD advances so `auto_land` (or a manual merge) has something to fast-forward. Disable per-deployment with `auto_commit_on_pass: false` in `rookery.yaml`.
+
 ## 7. Stop the daemon
 
 ```bash
-rookery daemon stop
+rookery daemon-stop
 # Sent SIGTERM to pid <n>
 ```
 
@@ -162,11 +167,13 @@ The daemon terminates running workers cleanly and flips their jobs back to `pend
 | `worktrees/<id>/PARCEL_DONE-<id>.md` | Verdict marker the agent writes |
 | `logs/` | Daemon stdout (JSON lines), land-events log |
 
-## Notes for this build
+## Notes
 
-- `rookery doctor` is currently a stub printing TODO. Real preflight checks land in P6 (G7) — for now, manually verify the prereqs at the top of this doc.
+- `rookery doctor` runs eight preflight checks (claude binary, git, OAuth token, ANTHROPIC_API_KEY ban, config file, database schema, worktrees dir, optional claude-lb). All-green output means you're ready to start the daemon.
 - Auto-land defaults to `false`. To exercise it, set `auto_land: true` in `rookery.yaml` and provide `auto_land_test_cmd`.
-- `rookery-daemon --profiles a,b,c` rotates OAuth profiles round-robin across workers. Point claude-lb at this once it lands.
+- Auto-commit on PASS is enabled by default (`auto_commit_on_pass: true`). The daemon stages and commits any unstaged work in the parcel worktree after a `PASS`/`PASS_WITH_WARNINGS` verdict, so the branch HEAD advances for `auto_land`.
+- `rookery-daemon --profiles a,b,c` rotates OAuth profiles round-robin across workers. Use the `[lb]` extra to delegate to `claude-lb` for health-aware selection.
+- Relative paths in `rookery.yaml` (e.g. `worktrees_root: ./worktrees`) anchor to the **config file's directory**, not the daemon's CWD — important for pm2/systemd setups that start from a different working directory.
 
 ## Next
 

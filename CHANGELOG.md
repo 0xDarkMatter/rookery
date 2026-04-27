@@ -32,6 +32,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   in `rookery.yaml` are now anchored to the config file's directory at load
   time, so daemons started from a different CWD by pm2 / systemd still resolve
   correctly.
+- **`--version` / `-V` flag** on the `rookery` CLI. Reads from
+  `importlib.metadata` so it stays in sync with the installed package version.
+- **`AGENTS.md`** — guide for AI assistants editing the rookery codebase
+  (run commands, conventions, Windows test-flake notes, boundaries).
+
+### Fixed
+
+- `__version__` in `src/rookery/__init__.py` was stuck at `0.1.0`; now
+  derives dynamically from package metadata.
+- `rookery-daemon start ...` syntax in three docstrings was a lie — Typer
+  collapses the single-command app into flat options. Docstrings now match
+  reality (`rookery-daemon [--config <path>]`).
+- `ruff check src/ tests/` is now clean (was 131 violations; now 0). Pyproject
+  ruff config widened line-length to 120 and added ignores for chronic
+  intentional patterns (lazy imports, Typer-Option-as-default,
+  exception-suffix conventions, complexity warnings on state-machine code).
 
 ### Migration
 
