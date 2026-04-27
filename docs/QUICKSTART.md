@@ -169,10 +169,10 @@ The daemon terminates running workers cleanly and flips their jobs back to `pend
 
 ## Notes
 
-- `rookery doctor` runs eight preflight checks (claude binary, git, OAuth token, ANTHROPIC_API_KEY ban, config file, database schema, worktrees dir, optional claude-lb). All-green output means you're ready to start the daemon.
+- `rookery doctor` runs eight preflight checks (claude binary, git, OAuth token, ANTHROPIC_API_KEY ban, config file, database schema, worktrees dir, optional roost). All-green output means you're ready to start the daemon.
 - Auto-land defaults to `false`. To exercise it, set `auto_land: true` in `rookery.yaml` and provide `auto_land_test_cmd`.
 - Auto-commit on PASS is enabled by default (`auto_commit_on_pass: true`). The daemon stages and commits any unstaged work in the parcel worktree after a `PASS`/`PASS_WITH_WARNINGS` verdict, so the branch HEAD advances for `auto_land`.
-- `rookery-daemon --profiles a,b,c` rotates OAuth profiles round-robin across workers. Use the `[lb]` extra to delegate to `claude-lb` for health-aware selection.
+- `rookery-daemon --profiles a,b,c` rotates OAuth profiles round-robin across workers. Use the `[lb]` extra to delegate to `roost` (formerly `claude-lb`) for health-aware selection.
 - Relative paths in `rookery.yaml` (e.g. `worktrees_root: ./worktrees`) anchor to the **config file's directory**, not the daemon's CWD — important for pm2/systemd setups that start from a different working directory.
 
 ## Next

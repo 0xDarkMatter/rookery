@@ -66,11 +66,11 @@ Every other parallel-Claude tool today is one of three shapes:
 │ rookery     ← runtime: queue + daemon + worktrees   ◀── you are here
 │   uses ↓ (optional)                                  │
 ├─────────────────────────────────────────────────────┤
-│ claude-lb        ← OAuth profile rotation            │
+│ roost            ← OAuth profile rotation            │
 └─────────────────────────────────────────────────────┘
 ```
 
-Each layer is independently useful. Use rookery alone for single-account local builds. Layer claude-lb under it when you need to fan out across multiple Max plans. Build something axiom-shaped on top when you need agent topology + skill libraries.
+Each layer is independently useful. Use rookery alone for single-account local builds. Layer roost under it when you need to fan out across multiple Max plans. Build something axiom-shaped on top when you need agent topology + skill libraries.
 
 ## Quickstart (greenfield — 60 seconds)
 
@@ -232,7 +232,7 @@ Skipped automatically when the worker already committed (`git diff --cached --qu
 | `VerdictAdapter` | `MarkerFileAdapter` (reads `PARCEL_DONE-<id>.md`) | `ExitCodeAdapter`, `JsonResultAdapter`, or your own |
 | `WorktreeLifecycle` | `GitWorktreeLifecycle` | Override for non-git or container-backed isolation |
 | `Notifier` | `LogNotifier` | Hook to pigeon, slack, webhooks for `parcel_landed`/`merge_blocked`/`lease_expired` |
-| Profile selector | env-var (`ROOKERY_PROFILES`) round-robin | `[lb]` extra delegates to `claude-lb` |
+| Profile selector | env-var (`ROOKERY_PROFILES`) round-robin | `[lb]` extra delegates to `roost` (OAuth profile rotation, formerly `claude-lb`) |
 
 Each interface is a small ABC with a single concrete default. The wiring point is constructor injection in `src/rookery/orchestrator/__main__.py` — see [AGENTS.md](AGENTS.md) for adding-a-feature recipes.
 

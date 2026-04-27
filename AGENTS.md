@@ -13,7 +13,7 @@ src/rookery/                     # the package
 ├── orchestrator/                # async daemon, queue, schema, backends
 │   ├── __main__.py              # rookery-daemon entrypoint
 │   └── migrations/*.sql         # additive-only schema migrations
-├── platform/                    # claude-lb shim, headless spawn, worktree IDs
+├── platform/                    # roost (OAuth LB) shim, headless spawn, worktree IDs
 ├── doctor.py                    # preflight checks
 ├── init.py                      # `rookery init` scaffolding
 └── worktree.py                  # WorktreeLifecycle ABC + GitWorktreeLifecycle
