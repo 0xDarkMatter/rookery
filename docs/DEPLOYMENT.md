@@ -76,15 +76,20 @@ FROM python:3.12-slim
 RUN apt-get update && apt-get install -y --no-install-recommends git curl \
  && rm -rf /var/lib/apt/lists/*
 
+# Install uv (the modern Python toolchain — 10-100× faster than pip)
+COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /usr/local/bin/
+
 # claude CLI install (project specific; bring your own)
 # RUN curl -fsSL https://claude.ai/install.sh | sh
 
 WORKDIR /srv/project
 COPY . /srv/project
 
-RUN pip install --no-cache-dir rookery
+# Install rookery as an isolated CLI tool (lands binaries on PATH)
+RUN uv tool install git+https://github.com/0xDarkMatter/rookery.git
 
-ENV ROOKERY_CONFIG=/srv/project/rookery.yaml
+ENV ROOKERY_CONFIG=/srv/project/rookery.yaml \
+    PATH="/root/.local/bin:${PATH}"
 
 STOPSIGNAL SIGTERM
 CMD ["rookery-daemon"]

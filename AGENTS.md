@@ -25,7 +25,8 @@ Tests mirror the source layout under `tests/unit/` and `tests/integration/`.
 
 | Task | Command |
 |---|---|
-| Install editable | `uv pip install -e .` |
+| Install (CLI use) | `uv tool install git+https://github.com/0xDarkMatter/rookery.git` |
+| Install (dev, editable) | `uv sync --extra dev` (in repo root) |
 | Unit tests | `uv run pytest tests/unit/ -q` |
 | Integration tests | `uv run pytest tests/integration/ -q` |
 | Lint | `uv run ruff check src/ tests/` (must pass clean before commit) |

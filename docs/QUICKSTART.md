@@ -10,21 +10,29 @@ Prereqs:
 
 ## 1. Install
 
-One-liner direct from GitHub (rookery is not yet on PyPI):
+**Install as a CLI tool** (recommended — isolated env, no venv to manage; PyPI publish pending):
 
 ```bash
-uv pip install git+https://github.com/0xDarkMatter/rookery.git
+uv tool install git+https://github.com/0xDarkMatter/rookery.git
 ```
 
-Or for development (editable install with the test extras):
+Updates later via `uv tool upgrade rookery`. Uninstall via `uv tool uninstall rookery`.
+
+**Try without installing** (one-shot ephemeral run):
+
+```bash
+uvx --from git+https://github.com/0xDarkMatter/rookery.git rookery --help
+```
+
+**Development setup** (clone + editable + dev extras — only if you're contributing to rookery itself):
 
 ```bash
 git clone https://github.com/0xDarkMatter/rookery.git
 cd rookery
-uv pip install -e ".[dev]"
+uv sync --extra dev
 ```
 
-Or just ask your coding agent: _"install rookery from https://github.com/0xDarkMatter/rookery"_ — most modern coding agents will pick the right install path for your environment.
+Or just ask your coding agent: _"install rookery from https://github.com/0xDarkMatter/rookery"_ — modern coding agents will pick the right path for your environment.
 
 Verify:
 
