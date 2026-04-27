@@ -11,10 +11,12 @@ Prereqs:
 ## 1. Install
 
 ```bash
-git clone <rookery-repo> rookery
+git clone https://github.com/0xDarkMatter/rookery.git
 cd rookery
 uv pip install -e .
 ```
+
+(rookery is not yet on PyPI — install from source for now.)
 
 Verify:
 
