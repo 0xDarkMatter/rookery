@@ -13,7 +13,6 @@ from rookery.cli import app
 from rookery.init import InitError, cmd_init
 from rookery.orchestrator.config import OrchestratorConfig
 
-
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
@@ -66,7 +65,6 @@ class TestExistingConfig:
 
     def test_does_not_modify_on_refusal(self, tmp_path: Path) -> None:
         cmd_init(target_dir=tmp_path)
-        original = (tmp_path / "rookery.yaml").read_text()
         # Write a sentinel so we can detect unwanted overwrite
         (tmp_path / "rookery.yaml").write_text("sentinel: true\n")
         with pytest.raises(InitError):

@@ -14,7 +14,6 @@ Coverage
 
 from __future__ import annotations
 
-import asyncio
 import json
 from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
@@ -29,7 +28,6 @@ from rookery.profile_selector import (
     ProfileListEmpty,
     ProfileSelector,
 )
-
 
 # ---------------------------------------------------------------------------
 # Helpers

@@ -20,7 +20,6 @@ lifecycle (function-scoped)
 
 from __future__ import annotations
 
-import asyncio
 import subprocess
 from pathlib import Path
 
@@ -28,7 +27,6 @@ import pytest
 
 from rookery.orchestrator.backend import Job
 from rookery.worktree import GitWorktreeLifecycle, WorktreeLifecycle
-
 
 # ---------------------------------------------------------------------------
 # Helpers

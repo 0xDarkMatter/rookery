@@ -220,7 +220,7 @@ class ClaudeLbSelector(ProfileSelector):
                 f"claude-lb binary not found at {bin_path!r}: {exc}. "
                 "Install via 'pip install claude-lb' or set the binary path explicitly."
             ) from exc
-        except asyncio.TimeoutError as exc:
+        except TimeoutError as exc:
             raise RuntimeError(
                 f"claude-lb pick timed out after {_SUBPROCESS_TIMEOUT_S}s"
             ) from exc

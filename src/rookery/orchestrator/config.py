@@ -143,7 +143,7 @@ class OrchestratorConfig(BaseModel):
     audit_loop: AuditLoopConfig = Field(default_factory=AuditLoopConfig)
 
 
-def load_config(path: Path | None = None) -> "OrchestratorConfig":
+def load_config(path: Path | None = None) -> OrchestratorConfig:
     """Load :class:`OrchestratorConfig` from a YAML file.
 
     If *path* is ``None`` or the file does not exist, returns a default

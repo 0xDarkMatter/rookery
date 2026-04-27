@@ -12,7 +12,7 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 
 import pytest
 
@@ -25,7 +25,6 @@ from rookery.adapters.registry import (
     UnknownVerdictAdapter,
     get_verdict_adapter,
 )
-
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -412,7 +411,6 @@ class TestPerParcelOverride:
 
     def test_daemon_resolves_per_job_override(self, tmp_path: Path) -> None:
         """Daemon._get_verdict_adapter_for_job returns job-specific adapter."""
-        import asyncio
 
         from rookery.orchestrator.daemon import Daemon
         from rookery.orchestrator.orchestrator import Orchestrator

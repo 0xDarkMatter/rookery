@@ -3,8 +3,9 @@
 daemon-stop    — send SIGTERM to a running daemon
 daemon-status  — check liveness of a running daemon
 
-Note: 'rookery-daemon start' lives in orchestrator/__main__.py (the
-rookery-daemon console script entrypoint), not here.
+Note: the daemon itself lives in orchestrator/__main__.py and is invoked
+via the ``rookery-daemon`` console script (no subcommand — Typer
+collapses the single-command app into flat options), not here.
 """
 
 from __future__ import annotations
@@ -14,8 +15,6 @@ import os
 import re
 import signal
 import subprocess
-import sys
-from contextlib import suppress
 from datetime import datetime
 from pathlib import Path
 from typing import Any
@@ -216,8 +215,8 @@ def _build_daemon_status_report(
         report["managed_by"] = "shell"
 
     try:
-        from rookery.orchestrator.orchestrator import Orchestrator  # noqa: PLC0415
         from rookery.orchestrator.config import OrchestratorConfig  # noqa: PLC0415
+        from rookery.orchestrator.orchestrator import Orchestrator  # noqa: PLC0415
 
         cfg = OrchestratorConfig(db_path=db_path)
         orch = Orchestrator(cfg.db_path, lease_ttl_s=cfg.lease_ttl_s)

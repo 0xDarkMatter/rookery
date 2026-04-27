@@ -2,8 +2,15 @@
 
 Runs the async daemon loop in the foreground until SIGINT/SIGTERM.
 
-Canonical invocation:
-    rookery-daemon start [--config <path>]
+Canonical invocation::
+
+    rookery-daemon                       # uses ./rookery.yaml + ./rookery.db
+    rookery-daemon --config <path>       # override config path
+    rookery-daemon --profiles a,b,c      # round-robin OAuth profiles
+
+(Typer collapses the single ``@app.command`` into a flat-options app, so
+no ``start`` subcommand is exposed even though one is decorated below.
+The semantics are the same as ``rookery-daemon start ...`` would have been.)
 
 This module is also the ``python -m rookery.orchestrator`` entry point.
 """
@@ -94,13 +101,14 @@ def start_cmd(
     if profiles:
         os.environ["ROOKERY_PROFILES"] = profiles
 
-    from rookery.orchestrator.config import OrchestratorConfig, load_config  # noqa: PLC0415
+    from rich.console import Console  # noqa: PLC0415
+
+    from rookery.orchestrator.config import load_config  # noqa: PLC0415
     from rookery.orchestrator.daemon import run_daemon  # noqa: PLC0415
+    from rookery.orchestrator.land_backend import LandBackend  # noqa: PLC0415
     from rookery.orchestrator.orchestrator import Orchestrator  # noqa: PLC0415
     from rookery.orchestrator.worker_backend import WorkerBackend  # noqa: PLC0415
-    from rookery.orchestrator.land_backend import LandBackend  # noqa: PLC0415
     from rookery.worktree import GitWorktreeLifecycle  # noqa: PLC0415
-    from rich.console import Console  # noqa: PLC0415
 
     console = Console()
 

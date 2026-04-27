@@ -14,7 +14,6 @@ from rookery.cli import app
 from rookery.doctor import CheckResult, run_checks
 from rookery.orchestrator.schema import apply_migrations
 
-
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------

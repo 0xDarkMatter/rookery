@@ -8,8 +8,7 @@ import pytest
 from typer.testing import CliRunner
 
 from rookery.cli import app
-from rookery.parcel import ValidationResult, parcel_new, parcel_validate
-
+from rookery.parcel import parcel_new, parcel_validate
 
 # ---------------------------------------------------------------------------
 # parcel_new tests

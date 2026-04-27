@@ -30,8 +30,8 @@ def worktree_list_cmd(ctx: typer.Context) -> None:
         Path(ctx.obj["db"]) if ctx.obj and "db" in ctx.obj else Path("./rookery.db")
     )
     try:
-        from rookery.orchestrator.orchestrator import Orchestrator  # noqa: PLC0415
         from rookery.orchestrator.config import OrchestratorConfig  # noqa: PLC0415
+        from rookery.orchestrator.orchestrator import Orchestrator  # noqa: PLC0415
 
         cfg = OrchestratorConfig(db_path=db_path)
         orch = Orchestrator(cfg.db_path, lease_ttl_s=cfg.lease_ttl_s)
@@ -89,8 +89,8 @@ def worktree_retire_cmd(
 
     # Step 1: look up the job and validate it is landed.
     try:
-        from rookery.orchestrator.orchestrator import Orchestrator  # noqa: PLC0415
         from rookery.orchestrator.config import OrchestratorConfig  # noqa: PLC0415
+        from rookery.orchestrator.orchestrator import Orchestrator  # noqa: PLC0415
 
         cfg = OrchestratorConfig(db_path=db_path)
         orch = Orchestrator(cfg.db_path, lease_ttl_s=cfg.lease_ttl_s)

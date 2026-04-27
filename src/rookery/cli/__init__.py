@@ -7,12 +7,15 @@ provides global ``--config`` / ``--db`` options that sub-commands read via
 
 from __future__ import annotations
 
+from importlib.metadata import PackageNotFoundError
+from importlib.metadata import version as _pkg_version
+
 import typer
 
 from rookery.cli.daemon import daemon_app
-from rookery.cli.init import init_cmd
 from rookery.cli.doctor import doctor_cmd
-from rookery.cli.land import land_app, land_cmd, land_history_cmd
+from rookery.cli.init import init_cmd
+from rookery.cli.land import land_app, land_history_cmd
 from rookery.cli.parcel import parcel_app
 from rookery.cli.queue import (
     cancel_cmd,
@@ -33,6 +36,17 @@ app = typer.Typer(
 )
 
 
+def _version_callback(value: bool) -> None:
+    if not value:
+        return
+    try:
+        v = _pkg_version("rookery")
+    except PackageNotFoundError:
+        v = "unknown (not installed)"
+    typer.echo(f"rookery {v}")
+    raise typer.Exit()
+
+
 @app.callback(invoke_without_command=True)
 def _root_callback(
     ctx: typer.Context,
@@ -47,6 +61,14 @@ def _root_callback(
         "--db",
         help="Path to SQLite database file.",
         envvar="ROOKERY_DB",
+    ),
+    _version: bool = typer.Option(
+        False,
+        "--version",
+        "-V",
+        callback=_version_callback,
+        is_eager=True,
+        help="Print the rookery version and exit.",
     ),
 ) -> None:
     """rookery: orchestrate unattended parallel claude -p sessions."""
@@ -80,7 +102,7 @@ app.command("init")(init_cmd)
 app.command("doctor")(doctor_cmd)
 
 # Convenience daemon commands at top level
-from rookery.cli.daemon import daemon_stop_cmd, daemon_status_cmd  # noqa: E402
+from rookery.cli.daemon import daemon_status_cmd, daemon_stop_cmd  # noqa: E402
 
 app.command("daemon-stop")(daemon_stop_cmd)
 app.command("daemon-status")(daemon_status_cmd)

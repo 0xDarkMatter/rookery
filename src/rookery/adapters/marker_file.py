@@ -31,7 +31,7 @@ def _parse_verdict_and_summary(path: Path) -> tuple[str, str | None]:
         ValueError: if no recognisable ``Verdict:`` line is found or the
             token is not one of the allowed values.
     """
-    _VALID = frozenset({"PASS", "PASS_WITH_WARNINGS", "BLOCK", "UNKNOWN"})
+    valid_tokens = frozenset({"PASS", "PASS_WITH_WARNINGS", "BLOCK", "UNKNOWN"})
 
     text = path.read_text(encoding="utf-8")
     lines = text.splitlines()
@@ -44,7 +44,7 @@ def _parse_verdict_and_summary(path: Path) -> tuple[str, str | None]:
         token = m.group(1).upper().rstrip("*")
         if token == "PASS_WITH_WARNING":
             token = "PASS_WITH_WARNINGS"
-        if token in _VALID:
+        if token in valid_tokens:
             verdict_token = token
             break
         raise ValueError(
@@ -108,6 +108,7 @@ class MarkerFileAdapter(VerdictAdapter):
             )
 
         from typing import cast
+
         from rookery.orchestrator.backend import AuditVerdict  # noqa: PLC0415
 
         return VerdictResult(

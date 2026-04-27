@@ -12,10 +12,7 @@ from __future__ import annotations
 import warnings
 from pathlib import Path
 
-import pytest
-
 from rookery.orchestrator.config import OrchestratorConfig, load_config
-
 
 # ---------------------------------------------------------------------------
 # Test 1 — canonical worktrees_root field

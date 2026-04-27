@@ -21,16 +21,13 @@ import asyncio
 import sqlite3
 import subprocess
 import time
-from datetime import datetime, timezone
 from pathlib import Path
-from unittest.mock import patch
 
 import pytest
 from typer.testing import CliRunner
 
 from rookery.orchestrator.backend import Job
-from rookery.worktree import GitWorktreeLifecycle, OrphanInfo, find_orphans
-
+from rookery.worktree import GitWorktreeLifecycle, find_orphans
 
 # ---------------------------------------------------------------------------
 # Shared helpers
@@ -385,7 +382,8 @@ def test_cli_sweep_dry_run_no_fs_changes(
     assert result.exit_code == 0, f"Unexpected exit: {result.output}"
     # Worktree must still exist — dry-run must not remove it.
     assert wt.is_dir(), "dry-run must not remove worktrees"
-    assert "dry-run" in result.output.lower() or "no orphan" in result.output.lower() or "found" in result.output.lower()
+    output_lc = result.output.lower()
+    assert "dry-run" in output_lc or "no orphan" in output_lc or "found" in output_lc
 
 
 def test_cli_sweep_removes_orphan(

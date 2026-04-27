@@ -21,7 +21,6 @@ from pydantic import BaseModel
 from rookery.orchestrator.config import OrchestratorConfig
 from rookery.orchestrator.schema import MIGRATIONS_DIR
 
-
 # ---------------------------------------------------------------------------
 # Result model
 # ---------------------------------------------------------------------------
@@ -203,10 +202,7 @@ def _check_config_file(config_path: Path) -> tuple[CheckResult, OrchestratorConf
 def _check_database(config: OrchestratorConfig | None) -> CheckResult:
     """Check 4: DB writable, schema migrations up to date."""
     # Resolve DB path — prefer config, fall back to default
-    if config is not None and config.db_path:
-        db_path = config.db_path
-    else:
-        db_path = Path("./rookery.db")
+    db_path = config.db_path if config is not None and config.db_path else Path("./rookery.db")
 
     if not db_path.exists():
         return CheckResult(

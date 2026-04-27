@@ -107,7 +107,6 @@ async def test_e2e_retry_succeeds_on_third_attempt(tmp_path: Path) -> None:
 
     orch = Orchestrator(tmp_path / "e2e.db", lease_ttl_s=60)
     try:
-        backend = FakeBackend()
         attempts = {"count": 0}
 
         class RetryBackend(FakeBackend):

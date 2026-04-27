@@ -9,6 +9,7 @@ real ``.pid`` — no claude, no git.
 
 from __future__ import annotations
 
+import contextlib
 import os
 import subprocess
 import sys
@@ -148,10 +149,8 @@ def backend(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
 def _cleanup_pid(pid: int | None) -> None:
     if pid is None or pid < 0:
         return
-    try:
+    with contextlib.suppress(OSError):
         os.kill(pid, 9 if not IS_WINDOWS else 15)
-    except OSError:
-        pass
 
 
 async def test_spawn_creates_handle_with_pid(backend) -> None:

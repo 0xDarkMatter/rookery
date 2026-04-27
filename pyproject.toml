@@ -63,14 +63,26 @@ build-backend = "hatchling.build"
 packages = ["src/rookery"]
 
 [tool.ruff]
-line-length = 100
+line-length = 120
 target-version = "py312"
 extend-exclude = ["**/migrations/*.py"]
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "N", "W", "UP", "B", "SIM", "PL"]
-ignore = ["PLR0913", "PLR2004"]
+ignore = [
+    "PLR0911",  # too-many-return-statements (codebase choice for state machines)
+    "PLR0912",  # too-many-branches (same reason)
+    "PLR0913",  # too-many-arguments (Typer signatures are wide by design)
+    "PLR0915",  # too-many-statements (orchestrator hot loops)
+    "PLR2004",  # magic-value-comparison (test fixtures use literals heavily)
+    "PLC0415",  # import-outside-top-level (deliberate lazy-import pattern; many already have noqa)
+    "B008",     # function-call-in-default-argument (Typer.Option in function defaults is canonical)
+    "N818",     # exception-name-without-error-suffix (some intentional, e.g. ParcelValidation)
+]
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
 testpaths = ["tests"]
+markers = [
+    "integration: end-to-end orchestrator + worker integration tests (slower)",
+]

@@ -25,8 +25,9 @@ command::
 
 Daemon entry point::
 
-    rookery-daemon start                 # canonical — dedicated console_script
-    rookery daemon-start           # alias, same code path
+    rookery-daemon                       # canonical — dedicated console_script
+    rookery-daemon --config <path>       # override config path
+    rookery-daemon --profiles a,b,c      # round-robin OAuth profiles
 """
 
 from __future__ import annotations

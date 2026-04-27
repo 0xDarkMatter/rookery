@@ -28,11 +28,11 @@ Design notes
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import sqlite3
-import subprocess
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
 from rookery.orchestrator.backend import Job
@@ -85,7 +85,7 @@ async def find_orphans(
     if not worktree_base.is_dir():
         return []
 
-    now_utc = datetime.now(tz=timezone.utc)
+    now_utc = datetime.now(tz=UTC)
 
     # Open a read-only connection — sweep should never mutate the DB.
     conn = sqlite3.connect(str(db_path), timeout=10.0)
@@ -99,7 +99,7 @@ async def find_orphans(
 
             # mtime of the worktree directory itself.
             mtime_ts = entry.stat().st_mtime
-            last_modified = datetime.fromtimestamp(mtime_ts, tz=timezone.utc)
+            last_modified = datetime.fromtimestamp(mtime_ts, tz=UTC)
             age_hours = (now_utc - last_modified).total_seconds() / 3600.0
 
             row = conn.execute(
@@ -341,18 +341,18 @@ class GitWorktreeLifecycle(WorktreeLifecycle):
         cwd = self.repo_root or self.base_dir
 
         # Gate 3: retry ``git worktree remove`` to handle Windows file locks.
-        _RETRY_ATTEMPTS = 3
-        _RETRY_BACKOFF_S = 1.0
+        retry_attempts = 3
+        retry_backoff_s = 1.0
         last_exc: Exception | None = None
-        for attempt in range(_RETRY_ATTEMPTS):
+        for attempt in range(retry_attempts):
             try:
                 await _run_git("worktree", "remove", str(worktree), cwd=cwd)
                 last_exc = None
                 break
             except RuntimeError as exc:
                 last_exc = exc
-                if attempt < _RETRY_ATTEMPTS - 1:
-                    await asyncio.sleep(_RETRY_BACKOFF_S)
+                if attempt < retry_attempts - 1:
+                    await asyncio.sleep(retry_backoff_s)
         if last_exc is not None:
             raise last_exc
 
@@ -389,12 +389,10 @@ class GitWorktreeLifecycle(WorktreeLifecycle):
         await _run_git("worktree", "remove", "--force", str(worktree), cwd=cwd)
 
         # Best-effort branch deletion: derive branch name from worktree dir name.
+        # Branch may already be gone or may never have existed — not fatal.
         branch = f"{self.branch_prefix}{worktree.name}"
-        try:
+        with contextlib.suppress(RuntimeError):
             await _run_git("branch", "-D", branch, cwd=cwd)
-        except RuntimeError:
-            # Branch may already be gone or may never have existed — not fatal.
-            pass
 
 
 __all__ = [

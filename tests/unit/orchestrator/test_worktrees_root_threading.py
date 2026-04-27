@@ -12,11 +12,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
-import pytest
-
 from rookery.orchestrator.config import OrchestratorConfig, load_config
 from rookery.worktree import GitWorktreeLifecycle
-
 
 # ---------------------------------------------------------------------------
 # Helpers

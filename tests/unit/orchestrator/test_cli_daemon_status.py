@@ -11,7 +11,6 @@ monkeypatched so these tests don't touch the real environment.
 from __future__ import annotations
 
 import json
-import subprocess
 from datetime import datetime, timedelta
 from pathlib import Path
 

@@ -13,7 +13,6 @@ from pathlib import Path
 import typer
 from rich.console import Console
 
-from rookery.cli.queue import enqueue_cmd
 from rookery.parcel import parcel_new, parcel_validate
 
 parcel_app = typer.Typer(

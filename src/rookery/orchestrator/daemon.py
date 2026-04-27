@@ -28,7 +28,7 @@ from pathlib import Path
 import structlog
 
 from rookery.adapters.base import VerdictAdapter
-from rookery.adapters.registry import UnknownVerdictAdapter, get_verdict_adapter
+from rookery.adapters.registry import get_verdict_adapter
 from rookery.orchestrator.backend import (
     MergeBlockReason,
     OrchestratorBackend,
@@ -746,6 +746,7 @@ def _run_git_auto_commit(worktree: Path, commit_msg: str, job_id: str) -> None:
         ["git", "-C", wt, "add", "-A"],
         capture_output=True,
         text=True,
+        check=False,
     )
     if add_result.returncode != 0:
         raise _AutoCommitError(
@@ -757,6 +758,7 @@ def _run_git_auto_commit(worktree: Path, commit_msg: str, job_id: str) -> None:
     diff_result = subprocess.run(
         ["git", "-C", wt, "diff", "--cached", "--quiet"],
         capture_output=True,
+        check=False,
     )
     if diff_result.returncode == 0:
         # Nothing staged — worker committed themselves already; nothing to do.
@@ -772,6 +774,7 @@ def _run_git_auto_commit(worktree: Path, commit_msg: str, job_id: str) -> None:
         ["git", "-C", wt, "commit", "-m", commit_msg],
         capture_output=True,
         text=True,
+        check=False,
     )
     if commit_result.returncode != 0:
         raise _AutoCommitError(

@@ -12,8 +12,6 @@ from __future__ import annotations
 
 from pathlib import Path
 
-import pytest
-
 
 def _resolve_db_path(
     config_path: Path,
@@ -25,7 +23,7 @@ def _resolve_db_path(
     between this helper and the actual daemon entry point will surface as a
     test failure.
     """
-    from rookery.orchestrator.config import OrchestratorConfig, load_config
+    from rookery.orchestrator.config import load_config
 
     cfg = load_config(config_path)
 

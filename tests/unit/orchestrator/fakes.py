@@ -94,7 +94,7 @@ class FakeBackend(OrchestratorBackend):
 
     async def harvest(self, handle: WorkerHandle) -> dict[str, object] | None:
         instr = self._advance(handle.job_id)
-        if instr == "alive" or instr == "dead":
+        if instr in {"alive", "dead"}:
             return None
         if instr.startswith("done"):
             _, _, summary = instr.partition(":")

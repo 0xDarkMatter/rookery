@@ -18,8 +18,6 @@ import subprocess
 from pathlib import Path
 from typing import Any
 
-import pytest
-
 from rookery.orchestrator import Orchestrator
 from rookery.orchestrator.backend import Job, OrchestratorBackend, WorkerHandle
 from rookery.orchestrator.daemon import Daemon

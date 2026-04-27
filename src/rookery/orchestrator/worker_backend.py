@@ -44,7 +44,7 @@ from rookery.platform.headless_spawn import spawn_headless_claude
 from rookery.platform.parcel_prompt import find_parcel_prompt
 from rookery.platform.worktree_dir import ensure_worktree
 from rookery.profile_selector import EnvVarSelector, ProfileSelector
-from rookery.worktree import GitWorktreeLifecycle, WorktreeLifecycle
+from rookery.worktree import WorktreeLifecycle
 
 log = structlog.get_logger(__name__)
 
