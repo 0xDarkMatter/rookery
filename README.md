@@ -4,7 +4,7 @@
 
 [![Hackathon](https://img.shields.io/badge/Claude%20Opus%204.7-Hackathon-blueviolet?logo=anthropic)](https://www.anthropic.com/)
 
-_Formerly known as `claude-fleet` (renamed 2026-04-27). As of v0.2.0 the Python package, imports (`from rookery...`), CLI binaries (`rookery` and `rookery-daemon`), env vars (`ROOKERY_*`), and config files (`rookery.yaml` / `rookery.db`) all use the new name. Not yet on PyPI — install from source for now (see [Quickstart](#quickstart-greenfield--60-seconds))._
+_Formerly known as `claude-fleet` (renamed 2026-04-27). As of v0.2.0 the Python package, imports (`from rookery...`), CLI binaries (`rookery` and `rookery-daemon`), env vars (`ROOKERY_*`), and config files (`rookery.yaml` / `rookery.db`) all use the new name. Install with `uv pip install git+https://github.com/0xDarkMatter/rookery.git` (PyPI publish pending)._
 
 **A job system for headless agent sessions.** Run dozens of unattended `claude -p` workers in parallel, each in its own git worktree, with dependency resolution, lease-based crash recovery, and optional auto-land on PASS verdicts. One worker per parcel, one parcel per worktree, one daemon per project.
 
@@ -32,7 +32,7 @@ That's the whole shape. Throw markdown parcels at it, walk away, come back to me
 ## Recent Updates
 
 **v0.2.0** (April 2026) — **BREAKING**
-- 🪶 **Renamed `claude-fleet` → `rookery`.** Python package, imports (`from rookery...`), CLI binaries (`rookery`, `rookery-daemon`), config files (`rookery.yaml`, `rookery.db`, `rookery.pid`), and env vars (`ROOKERY_*`) all use the new name. Hard switch — no fallback. See [CHANGELOG](CHANGELOG.md) for migration steps. _Not yet on PyPI — install from source._
+- 🪶 **Renamed `claude-fleet` → `rookery`.** Python package, imports (`from rookery...`), CLI binaries (`rookery`, `rookery-daemon`), config files (`rookery.yaml`, `rookery.db`, `rookery.pid`), and env vars (`ROOKERY_*`) all use the new name. Hard switch — no fallback. See [CHANGELOG](CHANGELOG.md) for migration steps. _Install with `uv pip install git+https://github.com/0xDarkMatter/rookery.git`._
 - ✨ **Auto-commit on PASS verdict.** Daemon now stages and commits any unstaged work in the parcel worktree after a `PASS` / `PASS_WITH_WARNINGS` verdict so `auto_land` (and manual merge) have a HEAD to fast-forward. Opt out via `auto_commit_on_pass: false`.
 - 🔢 **`rookery --version` / `-V`** flag (reads from `importlib.metadata`).
 - 📐 **Relative `worktrees_root` resolution** anchored to the config file's directory — pm2 / systemd setups starting the daemon from a different CWD now resolve worktree paths correctly.
@@ -75,9 +75,8 @@ Each layer is independently useful. Use rookery alone for single-account local b
 ## Quickstart (greenfield — 60 seconds)
 
 ```bash
-# Install from source (rookery is not yet on PyPI):
-git clone https://github.com/0xDarkMatter/rookery.git
-uv pip install -e ./rookery
+# Install — one-liner direct from GitHub (rookery is not yet on PyPI):
+uv pip install git+https://github.com/0xDarkMatter/rookery.git
 
 mkdir my-fleet && cd my-fleet
 git init -b main && git commit --allow-empty -m init
@@ -92,6 +91,8 @@ rookery parcel new hello-world
 rookery enqueue hello-world
 rookery-daemon               # foreground daemon; Ctrl-C to stop
 ```
+
+Or just point your coding agent at the repo: _"install rookery from https://github.com/0xDarkMatter/rookery and walk me through hello-world"_.
 
 In another terminal:
 
