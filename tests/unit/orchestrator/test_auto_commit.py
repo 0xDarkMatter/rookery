@@ -16,8 +16,8 @@ from __future__ import annotations
 
 import subprocess
 from pathlib import Path
-from typing import Any
 
+from rookery.adapters.base import VerdictResult
 from rookery.orchestrator import Orchestrator
 from rookery.orchestrator.backend import Job, OrchestratorBackend, WorkerHandle
 from rookery.orchestrator.daemon import Daemon
@@ -26,29 +26,11 @@ from rookery.orchestrator.daemon import Daemon
 # Helpers
 # ---------------------------------------------------------------------------
 
-_PASS_MARKER = """\
-# Parcel Done
-
-**Verdict:** PASS
-
-## Summary
-
-Implement gitstats feature
-
-## Details
-
-All changes committed.
-"""
-
-_BLOCK_MARKER = """\
-# Parcel Done
-
-**Verdict:** BLOCK
-
-## Summary
-
-Tests failed; blocking.
-"""
+# v0.3: tests use typed VerdictResult instead of marker-file blobs.
+# The PASS_RESULT and BLOCK_RESULT constants below replace the v0.2
+# _PASS_MARKER / _BLOCK_MARKER strings — same semantics, typed shape.
+_PASS_RESULT = VerdictResult(verdict="PASS", summary="Implement gitstats feature")
+_BLOCK_RESULT = VerdictResult(verdict="BLOCK", summary="Tests failed; blocking.")
 
 
 def _git(worktree: Path, *args: str) -> subprocess.CompletedProcess[str]:
@@ -96,13 +78,13 @@ def _head_sha(worktree: Path) -> str:
 class _ScriptedBackend(OrchestratorBackend):
     """Minimal backend that returns a pre-scripted harvest result.
 
-    *results* maps job_id → dict that harvest() returns (or None to indicate
-    'still running').  worktree_map maps job_id → worktree Path.
+    *results* maps job_id → VerdictResult that harvest() returns (or None
+    to indicate 'still running').  worktree_map maps job_id → worktree Path.
     """
 
     def __init__(
         self,
-        results: dict[str, dict[str, Any] | None],
+        results: dict[str, VerdictResult | None],
         worktree_map: dict[str, Path],
     ) -> None:
         self._results = results
@@ -121,7 +103,11 @@ class _ScriptedBackend(OrchestratorBackend):
     async def is_alive(self, handle: WorkerHandle) -> bool:
         return handle.job_id not in self._harvested
 
-    async def harvest(self, handle: WorkerHandle) -> dict[str, Any] | None:
+    async def harvest(
+        self,
+        handle: WorkerHandle,
+        adapter: object = None,  # noqa: ARG002 — accepted for ABC parity, ignored
+    ) -> VerdictResult | None:
         result = self._results.get(handle.job_id)
         if result is not None:
             self._harvested.add(handle.job_id)
@@ -161,7 +147,7 @@ async def test_pass_verdict_dirty_worktree_auto_commits(tmp_path: Path) -> None:
     # Worker left a file but did not commit.
     (wt / "output.py").write_text("# generated\n")
 
-    result = {"status": "done", "parcel_done_md": _PASS_MARKER}
+    result = _PASS_RESULT
     backend = _ScriptedBackend({"J1": result}, {"J1": wt})
 
     db = tmp_path / "q.db"
@@ -194,7 +180,7 @@ async def test_pass_verdict_clean_worktree_no_commit(tmp_path: Path) -> None:
     _git(wt, "commit", "-m", "feat: worker self-committed")
     sha_before = _head_sha(wt)
 
-    result = {"status": "done", "parcel_done_md": _PASS_MARKER}
+    result = _PASS_RESULT
     backend = _ScriptedBackend({"J2": result}, {"J2": wt})
 
     db = tmp_path / "q.db"
@@ -217,7 +203,7 @@ async def test_pass_verdict_commit_fails_still_transitions(tmp_path: Path) -> No
     # Point worktree at a non-existent path so git fails.
     wt = tmp_path / "no-such-dir"
 
-    result = {"status": "done", "parcel_done_md": _PASS_MARKER}
+    result = _PASS_RESULT
     backend = _ScriptedBackend({"J3": result}, {"J3": wt})
 
     db = tmp_path / "q.db"
@@ -244,7 +230,7 @@ async def test_auto_commit_on_pass_false_no_commit(tmp_path: Path) -> None:
 
     (wt / "output.py").write_text("# should not be committed\n")
 
-    result = {"status": "done", "parcel_done_md": _PASS_MARKER}
+    result = _PASS_RESULT
     backend = _ScriptedBackend({"J4": result}, {"J4": wt})
 
     db = tmp_path / "q.db"
@@ -271,7 +257,7 @@ async def test_block_verdict_dirty_worktree_no_commit(tmp_path: Path) -> None:
 
     (wt / "output.py").write_text("# should not be committed\n")
 
-    result = {"status": "done", "parcel_done_md": _BLOCK_MARKER}
+    result = _BLOCK_RESULT
     backend = _ScriptedBackend({"J5": result}, {"J5": wt})
 
     db = tmp_path / "q.db"

@@ -11,6 +11,7 @@ from collections.abc import Callable
 from dataclasses import dataclass, field
 from pathlib import Path
 
+from rookery.adapters.base import VerdictResult
 from rookery.orchestrator.backend import Job, OrchestratorBackend, WorkerHandle
 
 
@@ -90,18 +91,37 @@ class FakeBackend(OrchestratorBackend):
         if not spec.script:
             return True
         instr = spec.script[idx] if idx < len(spec.script) else spec.script[-1]
-        return instr != "dead"
+        # v0.3: 'fail*' instructions mean "worker died before reporting" — same
+        # liveness signal as 'dead'.  Both must report alive=False so the daemon's
+        # retry path fires.
+        return instr != "dead" and not instr.startswith("fail")
 
-    async def harvest(self, handle: WorkerHandle) -> dict[str, object] | None:
+    async def harvest(
+        self,
+        handle: WorkerHandle,
+        adapter: object = None,  # noqa: ARG002 — accepted for ABC parity, ignored
+    ) -> VerdictResult | None:
+        """Return a typed verdict per the script.
+
+        v0.3 contract — the daemon's retry signal is (alive=False, harvest=None).
+        FakeBackend script tokens:
+
+          alive          — worker still running (harvest=None, alive=True)
+          dead           — worker died without reporting; pairs with is_alive=False
+          fail[:msg]     — worker errored before reporting; same as 'dead' (retry trigger)
+          done[:summary] — worker reported PASS verdict
+          block[:summary]— worker reported BLOCK verdict (transitions to done)
+        """
         instr = self._advance(handle.job_id)
-        if instr in {"alive", "dead"}:
+        if instr in {"alive", "dead"} or instr.startswith("fail"):
+            # 'fail' replaces v0.2's "{status: failed}" path — same retry semantic
             return None
         if instr.startswith("done"):
             _, _, summary = instr.partition(":")
-            return {"status": "done", "output": summary or "ok"}
-        if instr.startswith("fail"):
-            _, _, error = instr.partition(":")
-            return {"status": "failed", "error": error or "test failure"}
+            return VerdictResult(verdict="PASS", summary=summary or "ok")
+        if instr.startswith("block"):
+            _, _, summary = instr.partition(":")
+            return VerdictResult(verdict="BLOCK", summary=summary or "blocked")
         raise AssertionError(f"unknown FakeBackend script instruction: {instr!r}")
 
     async def terminate(self, handle: WorkerHandle) -> None:

@@ -66,7 +66,10 @@ async def test_e2e_single_parcel(tmp_path: Path) -> None:
         final = orch.status("fake-parcel")
         assert final.status == "done"
         assert final.result is not None
-        assert final.result.get("output") == "e2e"
+        # v0.3: mark_done stores VerdictResult.model_dump(mode='json'),
+        # so structured fields appear at the top level.
+        assert final.result.get("verdict") == "PASS"
+        assert final.result.get("summary") == "e2e"
         assert final.completed_at is not None
 
         kinds = [e["kind"] for e in events]
@@ -109,13 +112,29 @@ async def test_e2e_retry_succeeds_on_third_attempt(tmp_path: Path) -> None:
     try:
         attempts = {"count": 0}
 
+        from rookery.adapters.base import VerdictResult
+
         class RetryBackend(FakeBackend):
-            async def harvest(self, handle):  # type: ignore[override]
-                # First two attempts fail, third succeeds.
+            """Simulates 'worker died before reporting' for the first 2 attempts.
+
+            The v0.3 retry signal is (alive=False, harvest=None) — i.e. the
+            worker subprocess exited without producing a verdict.  Both the
+            harvest and is_alive sides have to agree.
+            """
+
+            async def harvest(self, handle, adapter=None):  # type: ignore[override]
                 attempts["count"] += 1
                 if attempts["count"] <= 2:
-                    return {"status": "failed", "error": "transient"}
-                return {"status": "done", "output": "finally"}
+                    # Worker died before reporting; daemon must retry.
+                    return None
+                return VerdictResult(verdict="PASS", summary="finally")
+
+            async def is_alive(self, handle):  # type: ignore[override]
+                # Always report dead — paired with harvest=None on attempts 1-2
+                # this triggers mark_failed → retry; paired with a real
+                # VerdictResult on attempt 3 the daemon transitions to done
+                # regardless of liveness.
+                return False
 
         retry_backend = RetryBackend()
         daemon = Daemon(orch, retry_backend, tick_interval_s=0.05, max_concurrent=1)
@@ -127,7 +146,9 @@ async def test_e2e_retry_succeeds_on_third_attempt(tmp_path: Path) -> None:
         assert final.status == "done"
         assert final.attempts == 3
         assert final.result is not None
-        assert final.result.get("output") == "finally"
+        # mark_done now stores the typed VerdictResult.model_dump(mode='json')
+        assert final.result.get("verdict") == "PASS"
+        assert final.result.get("summary") == "finally"
     finally:
         orch.close()
 

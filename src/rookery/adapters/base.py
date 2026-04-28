@@ -24,6 +24,16 @@ class VerdictResult(BaseModel):
             exit code, file path).  Intentionally open-ended so adapters
             can surface whatever is useful for debugging without needing a
             schema change.
+        detail_md: Optional free-text markdown body (long-form summary).
+        tokens_in / tokens_out: Worker-reported Anthropic token counts.
+        duration_s: Wall-clock duration of the parcel run, in seconds.
+        tests_passed / tests_failed: Test counts the worker chose to report.
+        files_changed: Number of files the worker modified in the worktree.
+
+    All numeric metadata fields are optional — workers that don't surface
+    them simply leave them ``None``.  v0.2 marker-file workers populate
+    only the legacy fields (verdict / summary / detail); v0.3 ``rookery
+    parcel done`` workers can populate any subset of the structured set.
     """
 
     model_config = ConfigDict(extra="forbid")
@@ -31,6 +41,16 @@ class VerdictResult(BaseModel):
     verdict: AuditVerdict
     summary: str | None = None
     detail: dict[str, object] = Field(default_factory=dict)
+
+    # v0.3 structured metadata. All optional; default ``None`` matches the
+    # legacy MarkerFileAdapter output shape so existing tests stay green.
+    detail_md: str | None = None
+    tokens_in: int | None = None
+    tokens_out: int | None = None
+    duration_s: float | None = None
+    tests_passed: int | None = None
+    tests_failed: int | None = None
+    files_changed: int | None = None
 
 
 class VerdictAdapter(ABC):

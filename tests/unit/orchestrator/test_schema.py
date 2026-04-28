@@ -32,6 +32,7 @@ _EXPECTED_MIGRATIONS = [
     "0003_audit_integration.sql",
     "0004_auto_land.sql",
     "0005_verdict_adapter.sql",
+    "0006_parcel_results.sql",
 ]
 
 

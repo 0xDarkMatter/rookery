@@ -118,7 +118,13 @@ class WorkerHandle(BaseModel):
 
 
 class OrchestratorBackend(ABC):
-    """All backend implementations honour this ABC."""
+    """All backend implementations honour this ABC.
+
+    v0.3 change: ``harvest()`` now returns a typed :class:`VerdictResult`
+    via the supplied verdict adapter, replacing the v0.2 ``dict[str, object]``
+    return shape.  The daemon owns adapter selection (per-job override
+    via ``jobs.verdict_adapter``); the backend just runs the adapter.
+    """
 
     @abstractmethod
     async def spawn(self, job: Job) -> WorkerHandle:
@@ -129,12 +135,34 @@ class OrchestratorBackend(ABC):
         """Is the worker still running?"""
 
     @abstractmethod
-    async def harvest(self, handle: WorkerHandle) -> dict[str, object] | None:
-        """Return result dict if done, None if still running."""
+    async def harvest(
+        self,
+        handle: WorkerHandle,
+        adapter: VerdictAdapter,
+    ) -> VerdictResult | None:
+        """Run the verdict *adapter* against the worker's worktree.
+
+        Returns:
+            ``VerdictResult`` if the worker has signalled completion (any
+            verdict — PASS / PASS_WITH_WARNINGS / BLOCK / UNKNOWN),
+            ``None`` if it's still running.
+
+        The backend may enrich ``result.detail`` with diagnostics (e.g.
+        stdout tail) before returning, but must not change the verdict
+        or summary.
+        """
 
     @abstractmethod
     async def terminate(self, handle: WorkerHandle) -> None:
         """Forcibly stop the worker."""
+
+
+# Late imports to avoid circulars: backend.py is imported by adapters.base,
+# so we use TYPE_CHECKING-style strings in the ABC signature above.
+from typing import TYPE_CHECKING  # noqa: E402
+
+if TYPE_CHECKING:  # pragma: no cover
+    from rookery.adapters.base import VerdictAdapter, VerdictResult  # noqa: F401
 
 
 __all__ = [

@@ -41,8 +41,11 @@ claude_profile: null                # ~/.claude-profiles/<name>, null = default
 # ---------------------------------------------------------------------------
 # Verdict
 # ---------------------------------------------------------------------------
-# How workers signal completion. Built-ins: marker-file | exit-code | json-result
-# verdict_adapter: marker-file
+# How workers signal completion. v0.3+ default is ``chain``: prefer the
+# DB-direct path (worker invokes ``rookery parcel done``) and fall back to
+# the legacy marker-file path (worker writes PARCEL_DONE-<id>.md).
+# Built-ins: chain | db | marker-file | exit-code | json-result
+verdict_adapter: chain
 
 # ---------------------------------------------------------------------------
 # Auto-land (off by default — operator opts in)

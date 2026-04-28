@@ -27,7 +27,7 @@ from pathlib import Path
 
 import structlog
 
-from rookery.adapters.base import VerdictAdapter
+from rookery.adapters.base import VerdictAdapter, VerdictResult
 from rookery.adapters.registry import get_verdict_adapter
 from rookery.orchestrator.backend import (
     MergeBlockReason,
@@ -215,49 +215,34 @@ class Daemon:
     # --- auto-commit on PASS -------------------------------------------------
 
     @staticmethod
-    def _extract_verdict_from_result(result: dict[str, object]) -> str:
-        """Return the verdict string embedded in *result*, or ``'UNKNOWN'``.
+    def _subject_from_verdict_result(
+        result: VerdictResult,
+        job_id: str,  # noqa: ARG004 — kept for parity / future log context
+    ) -> str:
+        """Derive a short commit subject from the typed verdict result.
 
-        The marker-file adapter embeds the raw parcel-done markdown as
-        ``result["parcel_done_md"]``.  We scan for the first ``Verdict:`` line
-        (same patterns as :mod:`rookery.orchestrator.verdict_parser`) so
-        the auto-commit gate fires on PASS / PASS_WITH_WARNINGS without
-        importing the full parser (which raises on missing verdict).
+        v0.3 path: prefer ``result.summary`` (clean one-liner the worker
+        provided directly).  When summary is missing/empty, look in
+        ``result.detail_md`` for a ``## Summary`` block (legacy markdown
+        bodies workers wrote via ``--detail-file`` or marker files).  Falls
+        back to a generic message when both are absent.
+
+        Output is truncated to 72 chars so it fits a conventional commit
+        subject without wrapping.
         """
-        md = result.get("parcel_done_md")
-        if not isinstance(md, str) or not md:
-            return "UNKNOWN"
-        _verdict_re = re.compile(
-            r"^\s*\**\s*verdict\s*:\s*(?:\**\s*)*([A-Za-z_]+)",
-            re.IGNORECASE | re.MULTILINE,
-        )
-        m = _verdict_re.search(md)
-        if not m:
-            return "UNKNOWN"
-        token = m.group(1).upper().rstrip("*")
-        if token == "PASS_WITH_WARNING":
-            token = "PASS_WITH_WARNINGS"
-        return token
-
-    @staticmethod
-    def _extract_subject_from_result(result: dict[str, object], job_id: str) -> str:
-        """Derive a short commit subject from the parcel-done markdown.
-
-        Looks for the first non-empty line under a ``## Summary`` heading.
-        Falls back to the generic ``autonomous build by rookery`` message.
-        """
-        md = result.get("parcel_done_md")
-        if isinstance(md, str) and md:
+        if result.summary and result.summary.strip():
+            return result.summary.strip()[:72]
+        body = result.detail_md or ""
+        if body:
             _summary_re = re.compile(
                 r"^##\s+summary\s*$(.+?)^(?:#|\Z)",
                 re.IGNORECASE | re.MULTILINE | re.DOTALL,
             )
-            m = _summary_re.search(md)
+            m = _summary_re.search(body)
             if m:
                 for line in m.group(1).splitlines():
                     stripped = line.strip().lstrip("-* \t")
                     if stripped:
-                        # Truncate to 72 chars so the subject line stays sane.
                         return stripped[:72]
         return "autonomous build by rookery"
 
@@ -265,16 +250,17 @@ class Daemon:
         self,
         job_id: str,
         worktree: Path,
-        result: dict[str, object],
+        result: VerdictResult,
     ) -> None:
         """Stage and commit any unstaged work in *worktree* after a PASS verdict.
 
         Steps:
-        1. Extract verdict from *result*; return early if not PASS / PASS_WITH_WARNINGS.
+        1. Check verdict directly on the typed result; return early if not
+           PASS / PASS_WITH_WARNINGS.
         2. ``git add -A`` — stage everything not gitignored.
         3. ``git diff --cached --quiet`` — if nothing staged, worker committed
            themselves; skip to avoid a duplicate empty commit.
-        4. Commit with a subject derived from the parcel-done ``## Summary``.
+        4. Commit with a subject derived from ``result.summary``.
 
         On any git failure the error is logged to ``job.last_error`` and
         surfaced in the daemon log, but the verdict transition is NOT blocked.
@@ -282,11 +268,10 @@ class Daemon:
         if not self._auto_commit_on_pass:
             return
 
-        verdict = self._extract_verdict_from_result(result)
-        if verdict not in ("PASS", "PASS_WITH_WARNINGS"):
+        if result.verdict not in ("PASS", "PASS_WITH_WARNINGS"):
             return
 
-        subject = self._extract_subject_from_result(result, job_id)
+        subject = self._subject_from_verdict_result(result, job_id)
         commit_msg = f"feat({job_id}): {subject}"
 
         try:
@@ -324,6 +309,10 @@ class Daemon:
         1. ``jobs.verdict_adapter`` column (set from parcel frontmatter).
         2. ``self._default_verdict_adapter`` (from OrchestratorConfig).
 
+        v0.3: passes ``db_path=self.orch.db_path`` so the ``chain`` and
+        ``db`` adapters can find the queue DB.  Older adapters
+        (``marker-file``, ``json-result``) ignore the kwarg.
+
         Raises:
             UnknownVerdictAdapter: if the resolved name is not registered.
         """
@@ -334,7 +323,7 @@ class Daemon:
                 adapter_name = job.verdict_adapter
         except Exception:  # noqa: BLE001
             pass
-        return get_verdict_adapter(adapter_name)
+        return get_verdict_adapter(adapter_name, db_path=self.orch.db_path)
 
     async def _harvest_running(self) -> None:
         """Per spec §5: liveness first, then harvest, then heartbeat.
@@ -364,8 +353,22 @@ class Daemon:
                 )
                 continue
 
+            # v0.3: resolve the per-job adapter (honours frontmatter
+            # verdict_adapter override) and pass it into the backend's
+            # harvest() so the backend just runs the adapter and enriches
+            # the result with diagnostics (e.g. stdout tail).
             try:
-                result = await self.backend.harvest(handle)
+                adapter = self._get_verdict_adapter_for_job(job_id)
+            except Exception as exc:
+                _safe_log_exception(
+                    "orchestrator.daemon.adapter_resolve_error",
+                    job_id=job_id,
+                    err=str(exc),
+                )
+                continue
+
+            try:
+                result = await self.backend.harvest(handle, adapter)
             except Exception as exc:
                 _safe_log_exception(
                     "orchestrator.daemon.harvest_error",
@@ -375,23 +378,31 @@ class Daemon:
                 continue
 
             if result is not None:
-                status = result.get("status", "done")
-                if status == "done":
-                    # Auto-commit any unstaged work on the parcel branch before
-                    # transitioning to done.  Fires only on PASS / PASS_WITH_WARNINGS
-                    # verdicts; no-ops on clean worktrees (worker committed already).
+                # The worker finished signalling — transition to done regardless
+                # of verdict.  BLOCK / UNKNOWN propagate downstream to the
+                # audit/landing pipeline (where they may yet end up as
+                # ``blocked`` or ``failed``); the queue state machine only
+                # cares that the worker reported in.
+                #
+                # Auto-commit-on-PASS fires only for PASS / PASS_WITH_WARNINGS
+                # so failed-verdict worktrees aren't muddled with synthetic
+                # commits.
+                if result.verdict in ("PASS", "PASS_WITH_WARNINGS"):
                     await self._maybe_auto_commit(job_id, handle.worktree, result)
-                    self.orch.mark_done(job_id, result, worker_id=handle.worker_id)
-                else:
-                    err = str(result.get("error") or "worker reported failure")
-                    self.orch.mark_failed(job_id, err, worker_id=handle.worker_id)
+                # mark_done expects a JSON-serialisable dict; pydantic gives
+                # us one with model_dump(mode='json').
+                self.orch.mark_done(
+                    job_id,
+                    result.model_dump(mode="json"),
+                    worker_id=handle.worker_id,
+                )
                 self._handles.pop(job_id, None)
                 continue
 
             if not alive:
                 self.orch.mark_failed(
                     job_id,
-                    f"worker exited without writing PARCEL_DONE-{job_id}.md",
+                    f"worker exited without reporting a verdict ({job_id})",
                     worker_id=handle.worker_id,
                 )
                 self._handles.pop(job_id, None)

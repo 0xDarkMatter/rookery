@@ -5,6 +5,72 @@ All notable changes to rookery (formerly `claude-fleet`) are documented in this 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.0] - 2026-04-28
+
+A focused release on **how workers report verdicts to the queue**. Replaces
+the v0.2 marker-file IPC (worker writes `PARCEL_DONE-<id>.md`, daemon polls
+the filesystem, parses markdown with regex) with a DB-direct protocol where
+workers invoke a CLI helper that writes structured rows to the queue's
+SQLite db. The marker-file path stays as a legacy fallback.
+
+### Added
+
+- **`rookery parcel done`** — worker reports terminal verdict to the DB.
+  Reads `ROOKERY_DB` / `ROOKERY_PARCEL_ID` / `ROOKERY_PARCEL_ATTEMPT` env
+  vars (injected by the daemon at worker spawn). Accepts structured
+  metadata flags: `--tokens-in`, `--tokens-out`, `--duration-s`,
+  `--tests-passed`, `--tests-failed`, `--files-changed`. Optional
+  `--detail-file <path>` reads markdown for longer narrative.
+  `--write-marker-file` opt-in dual-writes the legacy file for audit.
+- **`rookery parcel progress <label>`** — streaming progress events.
+  Each call appends a row to `parcel_events` (informational only — daemon
+  never gates on these; foundation for the future `rookery watch` TUI).
+- **`rookery logs <id> [-f]`** — tail the parcel worker's stdout log.
+  `--lines N` for the last N lines, `--follow` / `-f` for tail-follow,
+  `--events` interleaves DB progress events.
+- **`rookery diff <id>`** — show `git diff <base>...HEAD` inside the
+  parcel worktree. Auto-detects the parent repo's default branch
+  (`origin/HEAD` → `main` → `master`). Supports `--against <ref>`,
+  `--stat`, `--name-only`. Pipes through `delta` if it's on PATH.
+- **New `parcel_results` table** — structured verdict storage with
+  CHECK constraint on the verdict enum, UNIQUE(job_id, attempt) for
+  retry history, and optional metadata columns.
+- **New `parcel_events` table** — streaming progress events keyed by
+  (job_id, attempt) with `event_type`, `label`, `detail`, optional JSON
+  payload.
+- **`DbResultAdapter` + `ChainedAdapter`** — new verdict adapters.
+  Default config flips from `verdict_adapter: marker-file` to
+  `verdict_adapter: chain` (DB-direct first, marker-file fallback).
+- **`Orchestrator.write_parcel_result()`, `read_parcel_result()`,
+  `append_parcel_event()`, `read_parcel_events()`** — public API for
+  the new tables.
+
+### Changed (BREAKING for backend authors)
+
+- **`OrchestratorBackend.harvest()` ABC** now takes a `VerdictAdapter`
+  argument and returns a typed `VerdictResult | None` instead of
+  `dict[str, object] | None`. Custom backends must update their
+  signatures. The daemon owns adapter selection (per-job override via
+  `jobs.verdict_adapter`); the backend just runs the adapter.
+- **`VerdictResult`** extended with optional structured fields
+  (`detail_md`, `tokens_in`, `tokens_out`, `duration_s`, `tests_passed`,
+  `tests_failed`, `files_changed`). Existing fields unchanged.
+- **`rookery parcel new` template** updated to invoke the new helper
+  in the Verdict section instead of writing the marker file by hand.
+- **Default `verdict_adapter` in `rookery.yaml`** is now `chain`.
+- **`WorkerBackend` constructor** takes optional `db_path: Path`;
+  when provided, the four `ROOKERY_*` env vars are injected at spawn.
+
+### Backward compatibility
+
+- Existing parcels writing `PARCEL_DONE-<id>.md` still work — the
+  `chain` adapter falls through to `MarkerFileAdapter`. No flag day
+  required for v0.2 parcel files.
+- Per-job `verdict_adapter` override (`marker-file` / `db` / `chain`)
+  honoured exactly as before.
+- Existing v0.2 DBs auto-upgrade on first daemon start (migration
+  `0006_parcel_results.sql` is idempotent and additive).
+
 ## [0.2.0] - 2026-04-27
 
 ### Changed (BREAKING)

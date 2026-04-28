@@ -15,6 +15,7 @@ import typer
 from rookery.cli.daemon import daemon_app
 from rookery.cli.doctor import doctor_cmd
 from rookery.cli.init import init_cmd
+from rookery.cli.inspect import diff_cmd, logs_cmd
 from rookery.cli.land import land_app, land_history_cmd
 from rookery.cli.parcel import parcel_app
 from rookery.cli.queue import (
@@ -100,6 +101,10 @@ app.command("land-history")(land_history_cmd)
 # Setup / diagnostic commands
 app.command("init")(init_cmd)
 app.command("doctor")(doctor_cmd)
+
+# v0.3 inspection commands — tail logs + show worktree diff
+app.command("logs")(logs_cmd)
+app.command("diff")(diff_cmd)
 
 # Convenience daemon commands at top level
 from rookery.cli.daemon import daemon_status_cmd, daemon_stop_cmd  # noqa: E402

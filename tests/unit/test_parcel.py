@@ -29,7 +29,8 @@ class TestParcelNew:
         assert "deps: []" in text
         assert "max_attempts: 3" in text
         assert "verification_enabled: true" in text
-        assert "verdict_adapter: marker-file" in text
+        # v0.3 default: chain (DbResultAdapter → MarkerFileAdapter)
+        assert "verdict_adapter: chain" in text
 
     def test_creates_parent_directories(self, tmp_path: Path) -> None:
         deep = tmp_path / "a" / "b" / "c" / "parcel.md"
@@ -42,11 +43,14 @@ class TestParcelNew:
         assert result == Path("parcels/my-id.md")
         assert (tmp_path / "parcels" / "my-id.md").exists()
 
-    def test_body_contains_parcel_done_reference(self, tmp_path: Path) -> None:
+    def test_body_contains_verdict_helper_invocation(self, tmp_path: Path) -> None:
+        """v0.3 default: parcel template tells the worker to invoke
+        ``rookery parcel done`` (replaces the old PARCEL_DONE-<id>.md hint)."""
         target = tmp_path / "abc.md"
         parcel_new("abc", prompt_path=target)
         text = target.read_text(encoding="utf-8")
-        assert "PARCEL_DONE-abc.md" in text
+        assert "rookery parcel done" in text
+        assert "--verdict PASS" in text
 
     def test_refuses_overwrite_when_force_false(self, tmp_path: Path) -> None:
         target = tmp_path / "task.md"

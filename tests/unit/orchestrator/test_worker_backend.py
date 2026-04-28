@@ -171,60 +171,82 @@ async def test_spawn_creates_handle_with_pid(backend) -> None:
 
 
 async def test_harvest_returns_none_without_parcel_done(backend) -> None:
+    """v0.3: harvest now delegates to the supplied adapter."""
+    from rookery.adapters.marker_file import MarkerFileAdapter  # noqa: PLC0415
+
     job = Job(id="J2", prompt_path="/tmp/J2.md")
     handle = await backend.spawn(job)
     try:
-        result = await backend.harvest(handle)
+        result = await backend.harvest(handle, MarkerFileAdapter())
         assert result is None
     finally:
         _cleanup_pid(handle.pid)
 
 
 async def test_harvest_parses_parcel_done_md(backend) -> None:
-    """Harvest finds PARCEL_DONE-<job_id>.md (new convention)."""
+    """v0.3: with a MarkerFileAdapter, harvest still picks up legacy markers
+    AND attaches stdout_tail to result.detail for diagnostics."""
+    from rookery.adapters.marker_file import MarkerFileAdapter  # noqa: PLC0415
+
     job = Job(id="J3", prompt_path="/tmp/J3.md")
     handle = await backend.spawn(job)
     try:
         done_file = handle.worktree / f"PARCEL_DONE-{job.id}.md"
-        done_file.write_text("# PARCEL_DONE\n\nAll good.\n", encoding="utf-8")
+        done_file.write_text(
+            "# PARCEL_DONE\n\nVerdict: PASS\n\n## Summary\n\nAll good.\n",
+            encoding="utf-8",
+        )
 
-        result = await backend.harvest(handle)
+        result = await backend.harvest(handle, MarkerFileAdapter())
         assert result is not None
-        assert result["status"] == "done"
-        assert "All good" in str(result["parcel_done_md"])
-        assert "launched J3" in str(result["stdout_tail"])
+        assert result.verdict == "PASS"
+        assert result.summary is not None
+        assert "All good" in result.summary
+        assert "launched J3" in str(result.detail.get("stdout_tail", ""))
     finally:
         _cleanup_pid(handle.pid)
 
 
 async def test_harvest_falls_back_to_legacy_parcel_done_md(backend) -> None:
-    """Legacy plain PARCEL_DONE.md still recognised for backward compatibility."""
+    """v0.3: MarkerFileAdapter still recognises plain PARCEL_DONE.md fallback."""
+    from rookery.adapters.marker_file import MarkerFileAdapter  # noqa: PLC0415
+
     job = Job(id="J3b", prompt_path="/tmp/J3b.md")
     handle = await backend.spawn(job)
     try:
         done_file = handle.worktree / "PARCEL_DONE.md"
-        done_file.write_text("# PARCEL_DONE\n\nLegacy.\n", encoding="utf-8")
+        done_file.write_text(
+            "# PARCEL_DONE\n\nVerdict: PASS\n\n## Summary\n\nLegacy.\n",
+            encoding="utf-8",
+        )
 
-        result = await backend.harvest(handle)
+        result = await backend.harvest(handle, MarkerFileAdapter())
         assert result is not None
-        assert result["status"] == "done"
-        assert "Legacy" in str(result["parcel_done_md"])
+        assert result.verdict == "PASS"
+        assert result.summary is not None
+        assert "Legacy" in result.summary
     finally:
         _cleanup_pid(handle.pid)
 
 
 async def test_harvest_prefers_new_over_legacy(backend) -> None:
-    """When both files exist, harvest reads the per-parcel one (source of truth)."""
+    """When both marker files exist, MarkerFileAdapter reads the per-parcel one."""
+    from rookery.adapters.marker_file import MarkerFileAdapter  # noqa: PLC0415
+
     job = Job(id="J3c", prompt_path="/tmp/J3c.md")
     handle = await backend.spawn(job)
     try:
-        (handle.worktree / f"PARCEL_DONE-{job.id}.md").write_text("new", encoding="utf-8")
-        (handle.worktree / "PARCEL_DONE.md").write_text("legacy", encoding="utf-8")
+        (handle.worktree / f"PARCEL_DONE-{job.id}.md").write_text(
+            "Verdict: PASS\n\n## Summary\nnew\n", encoding="utf-8"
+        )
+        (handle.worktree / "PARCEL_DONE.md").write_text(
+            "Verdict: BLOCK\n\n## Summary\nlegacy\n", encoding="utf-8"
+        )
 
-        result = await backend.harvest(handle)
+        result = await backend.harvest(handle, MarkerFileAdapter())
         assert result is not None
-        assert "new" in str(result["parcel_done_md"])
-        assert "legacy" not in str(result["parcel_done_md"])
+        assert result.verdict == "PASS"  # came from the per-parcel file
+        assert result.summary == "new"
     finally:
         _cleanup_pid(handle.pid)
 
@@ -456,3 +478,158 @@ def test_augment_windows_path_is_idempotent() -> None:
     twice = _augment_windows_path(once)
 
     assert once == twice, "augmentation is not idempotent"
+
+
+# ---------------------------------------------------------------------------
+# v0.3 Phase 1: ROOKERY_* env injection at worker spawn
+# ---------------------------------------------------------------------------
+
+
+async def test_spawn_injects_rookery_env_vars(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """When constructed with ``db_path``, spawn must inject the four
+    ``ROOKERY_*`` env vars into the worker's environment so the ``rookery
+    parcel done`` helper can find the queue DB."""
+    from rookery.orchestrator.worker_backend import WorkerBackend
+
+    repo_root = tmp_path / "repo"
+    repo_root.mkdir()
+    (repo_root / "parcels").mkdir()
+    worktrees_root = tmp_path / "worktrees"
+    worktrees_root.mkdir()
+    db_path = tmp_path / "rookery.db"
+
+    captured_env: dict[str, str] = {}
+
+    def fake_find_parcel_prompt(parcels_dir: Path, name: str) -> Path:
+        path = parcels_dir / f"{name}.md"
+        path.write_text("# test parcel\n", encoding="utf-8")
+        return path
+
+    def fake_ensure_worktree(parcel_id: str, repo_root: Path, **_kwargs) -> Path:
+        wt = worktrees_root / parcel_id
+        wt.mkdir(parents=True, exist_ok=True)
+        return wt
+
+    def fake_spawn_headless_claude(
+        *, worktree: Path, prompt_path: Path, log_path: Path, env: dict[str, str], **_kw
+    ) -> SpawnResult:
+        captured_env.update(env)
+        log_path.parent.mkdir(parents=True, exist_ok=True)
+        log_path.touch()
+        return SpawnResult(
+            pid=99999,
+            worktree=worktree,
+            log_path=log_path,
+            prompt_path=prompt_path,
+            prompt_bytes=0,
+        )
+
+    monkeypatch.setattr(
+        "rookery.orchestrator.worker_backend.find_parcel_prompt",
+        fake_find_parcel_prompt,
+    )
+    monkeypatch.setattr(
+        "rookery.orchestrator.worker_backend.ensure_worktree",
+        fake_ensure_worktree,
+    )
+    monkeypatch.setattr(
+        "rookery.orchestrator.worker_backend.spawn_headless_claude",
+        fake_spawn_headless_claude,
+    )
+    monkeypatch.setattr(
+        "rookery.orchestrator.worker_backend.claude_lb.refresh_expired", lambda: None
+    )
+    monkeypatch.setattr(
+        "rookery.orchestrator.worker_backend.claude_lb.pick_profile",
+        lambda **_kw: None,
+    )
+
+    backend = WorkerBackend(
+        repo_root=repo_root,
+        worktrees_root=worktrees_root,
+        env_overrides={
+            "ANTHROPIC_API_KEY": "",
+            "CLAUDE_CODE_OAUTH_TOKEN": "fake-token",
+        },
+        db_path=db_path,
+    )
+
+    job = Job(id="env-test", prompt_path="/tmp/env-test.md", attempts=2)
+    handle = await backend.spawn(job)
+
+    assert captured_env["ROOKERY_DB"] == str(db_path.resolve())
+    assert captured_env["ROOKERY_PARCEL_ID"] == "env-test"
+    assert captured_env["ROOKERY_PARCEL_ATTEMPT"] == "2"
+    assert captured_env["ROOKERY_WORKTREE"] == str(handle.worktree.resolve())
+
+
+async def test_spawn_omits_rookery_env_vars_when_db_path_missing(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Without ``db_path``, spawn must NOT inject ROOKERY_DB et al — workers
+    fall back to the legacy marker-file protocol."""
+    from rookery.orchestrator.worker_backend import WorkerBackend
+
+    repo_root = tmp_path / "repo"
+    repo_root.mkdir()
+    (repo_root / "parcels").mkdir()
+    worktrees_root = tmp_path / "worktrees"
+    worktrees_root.mkdir()
+
+    captured_env: dict[str, str] = {}
+
+    def fake_find_parcel_prompt(parcels_dir: Path, name: str) -> Path:
+        path = parcels_dir / f"{name}.md"
+        path.write_text("# test parcel\n", encoding="utf-8")
+        return path
+
+    def fake_ensure_worktree(parcel_id: str, repo_root: Path, **_kwargs) -> Path:
+        wt = worktrees_root / parcel_id
+        wt.mkdir(parents=True, exist_ok=True)
+        return wt
+
+    def fake_spawn(*, worktree, prompt_path, log_path, env, **_kw) -> SpawnResult:
+        captured_env.update(env)
+        log_path.parent.mkdir(parents=True, exist_ok=True)
+        log_path.touch()
+        return SpawnResult(pid=99999, worktree=worktree, log_path=log_path,
+                           prompt_path=prompt_path, prompt_bytes=0)
+
+    monkeypatch.setattr(
+        "rookery.orchestrator.worker_backend.find_parcel_prompt",
+        fake_find_parcel_prompt,
+    )
+    monkeypatch.setattr(
+        "rookery.orchestrator.worker_backend.ensure_worktree",
+        fake_ensure_worktree,
+    )
+    monkeypatch.setattr(
+        "rookery.orchestrator.worker_backend.spawn_headless_claude", fake_spawn
+    )
+    monkeypatch.setattr(
+        "rookery.orchestrator.worker_backend.claude_lb.refresh_expired", lambda: None
+    )
+    monkeypatch.setattr(
+        "rookery.orchestrator.worker_backend.claude_lb.pick_profile",
+        lambda **_kw: None,
+    )
+
+    backend = WorkerBackend(
+        repo_root=repo_root,
+        worktrees_root=worktrees_root,
+        env_overrides={
+            "ANTHROPIC_API_KEY": "",
+            "CLAUDE_CODE_OAUTH_TOKEN": "fake-token",
+        },
+        # No db_path passed
+    )
+
+    job = Job(id="legacy", prompt_path="/tmp/legacy.md")
+    await backend.spawn(job)
+
+    assert "ROOKERY_DB" not in captured_env
+    assert "ROOKERY_PARCEL_ID" not in captured_env
+    assert "ROOKERY_PARCEL_ATTEMPT" not in captured_env
+    assert "ROOKERY_WORKTREE" not in captured_env

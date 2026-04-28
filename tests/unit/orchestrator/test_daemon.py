@@ -53,7 +53,9 @@ async def test_single_job_runs_to_done(
     final = orch.status("A")
     assert final.status == "done"
     assert final.result is not None
-    assert final.result["output"] == "hello"
+    # v0.3: result is now a VerdictResult.model_dump() with structured fields.
+    assert final.result["verdict"] == "PASS"
+    assert final.result["summary"] == "hello"
     assert backend.spawn_calls == ["A"]
 
 
@@ -69,7 +71,9 @@ async def test_dead_worker_without_result_is_failed(
     final = orch.status("A")
     assert final.status == "blocked"
     assert final.last_error is not None
-    assert "PARCEL_DONE" in final.last_error
+    # v0.3: error message switched from "PARCEL_DONE-<id>.md" filename to
+    # the protocol-agnostic "without reporting a verdict".
+    assert "without reporting a verdict" in final.last_error
 
 
 async def test_failed_result_retries_then_blocks(

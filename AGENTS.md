@@ -8,8 +8,15 @@ This file is for the *meta-case*: an AI agent editing the orchestrator that runs
 
 ```
 src/rookery/                     # the package
-├── adapters/                    # VerdictAdapter ABC + 3 built-in implementations
+├── adapters/                    # VerdictAdapter ABC + 5 built-in implementations
+│   ├── chain.py                 # ChainedAdapter (v0.3 default — DB then marker file)
+│   ├── db.py                    # DbResultAdapter (reads parcel_results table)
+│   ├── marker_file.py           # MarkerFileAdapter (legacy PARCEL_DONE-<id>.md)
+│   ├── exit_code.py / json_result.py
+│   └── registry.py              # name → adapter lookup
 ├── cli/                         # Typer subcommands (one file per group)
+│   ├── parcel.py                # parcel new / validate / done / progress
+│   └── inspect.py               # rookery logs / diff (v0.3)
 ├── orchestrator/                # async daemon, queue, schema, backends
 │   ├── __main__.py              # rookery-daemon entrypoint
 │   └── migrations/*.sql         # additive-only schema migrations
@@ -18,6 +25,10 @@ src/rookery/                     # the package
 ├── init.py                      # `rookery init` scaffolding
 └── worktree.py                  # WorktreeLifecycle ABC + GitWorktreeLifecycle
 ```
+
+Key tables: `jobs` (queue state), `parcel_results` (terminal verdicts +
+structured metadata), `parcel_events` (streaming progress), `audit_reports`,
+`land_events`, `job_events`, `_applied_migrations`.
 
 Tests mirror the source layout under `tests/unit/` and `tests/integration/`.
 
@@ -63,7 +74,7 @@ Tests mirror the source layout under `tests/unit/` and `tests/integration/`.
 
 1. **Schema change?** New migration file, additive only. Test against a fresh DB and a v0.1.0 DB.
 2. **New CLI command?** Add to `src/rookery/cli/<group>.py`, register in `src/rookery/cli/__init__.py`. Help text must end with the env var hint if it reads one (`[env var: ROOKERY_*]` is auto-added by Typer).
-3. **New verdict adapter?** Implement `VerdictAdapter`, register in `adapters/registry.py`, add a unit test under `tests/unit/test_adapters.py`.
+3. **New verdict adapter?** Implement `VerdictAdapter` (`detect(worktree, job_id) -> VerdictResult | None`), register in `adapters/registry.py`. If the adapter needs runtime context (like `DbResultAdapter` needs `db_path`), accept it via constructor and add a special-case in `get_verdict_adapter()` that threads the kwarg through. Add a unit test under `tests/unit/test_adapters.py`.
 4. **New worktree lifecycle?** Implement `WorktreeLifecycle` (3 methods: `create`, `exists`, `retire`). Wire via constructor injection — don't import the new class anywhere outside the wiring point.
 5. **Run the full check**: `ruff check src/ tests/ && pytest tests/unit/ -p no:randomly && pytest tests/integration/`. All three must pass.
 6. **CHANGELOG entry** under a new version header, plus a row in README's "Recent Updates" section.

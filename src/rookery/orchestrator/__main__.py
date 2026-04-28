@@ -143,6 +143,9 @@ def start_cmd(
         shutdown_grace_s=cfg.shutdown_grace_s,
         claude_profile=cfg.claude_profile,
         worktree_lifecycle=worktree_lifecycle,
+        # v0.3: enable ROOKERY_DB env var injection so workers can invoke
+        # ``rookery parcel done`` to report verdicts directly to the queue DB.
+        db_path=cfg.db_path,
     )
 
     land_backend: LandBackend | None = None

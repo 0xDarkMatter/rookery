@@ -31,6 +31,14 @@ That's the whole shape. Throw markdown parcels at it, walk away, come back to me
 
 ## Recent Updates
 
+**v0.3.0** (April 2026)
+- 🪺 **DB-direct parcel reporting.** Workers now invoke `rookery parcel done --verdict PASS --summary "..."` which writes structured verdict rows directly to the queue DB. The `PARCEL_DONE-<id>.md` marker-file path stays as a legacy fallback (default adapter is `chain` — DB first, then marker file).
+- ✨ **Streaming progress** via `rookery parcel progress "<step>"` — events land in a `parcel_events` table for live observability (and the future `rookery watch` TUI).
+- 🔍 **`rookery logs <id> [-f]`** tails the parcel's stdout log; `--events` interleaves progress events from the DB.
+- 🔬 **`rookery diff <id>`** shows `git diff main...HEAD` inside the parcel worktree (auto-detects default branch; pipes through `delta` if installed). Supports `--stat`, `--name-only`, `--against <ref>`.
+- 🏗️ **Typed `VerdictResult` end-to-end** — replaces the v0.2 `dict[str, object]` return shape from `WorkerBackend.harvest()`. Adapter chain (`DbResultAdapter` → `MarkerFileAdapter`) sits between worker and daemon.
+- 📊 **Structured metadata captured at verdict time**: `tokens_in`, `tokens_out`, `duration_s`, `tests_passed`, `tests_failed`, `files_changed`. Optional — workers populate any subset.
+
 **v0.2.0** (April 2026) — **BREAKING**
 - 🪶 **Renamed `claude-fleet` → `rookery`.** Python package, imports (`from rookery...`), CLI binaries (`rookery`, `rookery-daemon`), config files (`rookery.yaml`, `rookery.db`, `rookery.pid`), and env vars (`ROOKERY_*`) all use the new name. Hard switch — no fallback. See [CHANGELOG](CHANGELOG.md) for migration steps. _Install with `uv tool install git+https://github.com/0xDarkMatter/rookery.git`._
 - ✨ **Auto-commit on PASS verdict.** Daemon now stages and commits any unstaged work in the parcel worktree after a `PASS` / `PASS_WITH_WARNINGS` verdict so `auto_land` (and manual merge) have a HEAD to fast-forward. Opt out via `auto_commit_on_pass: false`.
@@ -132,7 +140,7 @@ priority: 5                # higher runs first; default 0
 deps: [schema-migration]   # ids of parcels that must finish first
 max_attempts: 3            # retry cap before -> blocked
 auto_land: false           # opt-in per-parcel; overrides global
-verdict_adapter: marker-file   # marker-file | exit-code | json-result
+verdict_adapter: chain     # chain | db | marker-file | exit-code | json-result
 ---
 
 # Add OAuth flow
@@ -144,15 +152,38 @@ You are working in a fresh git worktree. Implement OAuth2 in `src/auth/oauth.py`
 - `ruff check src/auth/` clean
 
 ## Verdict
-When you finish, write `PARCEL_DONE-add-oauth-flow.md` at the worktree root:
+When you finish, run from inside the worktree:
 
-    Verdict: PASS
+    rookery parcel done --verdict PASS --summary "<one-line headline>"
 
-    ## Summary
-    <one paragraph>
+Optional metadata:
+
+    rookery parcel done --verdict PASS --summary "..." \
+      --tokens-in 12500 --tokens-out 3200 --duration-s 187 \
+      --tests-passed 42 --tests-failed 0
 ```
 
-The default verdict adapter (`marker-file`) reads the first `Verdict:` line. Values: `PASS`, `PASS_WITH_WARNINGS`, `BLOCK`, `UNKNOWN`. Other built-ins: `exit-code`, `json-result`. Or implement `VerdictAdapter` for your own.
+The default verdict adapter is `chain` — try the DB-direct path first (worker invoked `rookery parcel done`), then fall back to `marker-file` for legacy parcels that wrote `PARCEL_DONE-<id>.md`. Values for `--verdict`: `PASS`, `PASS_WITH_WARNINGS`, `BLOCK`, `UNKNOWN`. Other built-in adapters: `db` (DB-only), `marker-file` (legacy-only), `exit-code`, `json-result`. Or implement `VerdictAdapter` for your own.
+
+## Worker reporting protocol
+
+When the daemon spawns a worker it injects four env vars into the worker's environment:
+
+| Env var | Value |
+|---|---|
+| `ROOKERY_DB` | absolute path to the queue's SQLite db |
+| `ROOKERY_PARCEL_ID` | the parcel id (== `jobs.id`) |
+| `ROOKERY_PARCEL_ATTEMPT` | current attempt number (1-indexed) |
+| `ROOKERY_WORKTREE` | absolute path to the worker's git worktree |
+
+`rookery parcel done` and `rookery parcel progress` read these env vars to find the right DB and write to the right rows — workers never need to spell the queue's filename or schema. The two helpers write to dedicated tables:
+
+| Table | Written by | Daemon reads it for |
+|---|---|---|
+| `parcel_results` | `rookery parcel done` | terminal verdict + structured metadata |
+| `parcel_events` | `rookery parcel progress` | streaming progress (live observability) |
+
+Workers that don't (or can't) invoke the helpers fall back to writing `PARCEL_DONE-<id>.md` at the worktree root — the `chain` adapter picks it up automatically.
 
 ## Daemon control
 
@@ -185,6 +216,9 @@ rookery land history <id>     # land_events rows for a job
 rookery worktree list
 rookery worktree retire <id>
 rookery worktree sweep [--dry-run]
+
+rookery logs <id> [-f] [--lines N] [--events]   # tail parcel stdout (v0.3)
+rookery diff <id> [--stat] [--against <ref>]    # git diff inside the parcel worktree (v0.3)
 ```
 
 ## State machine

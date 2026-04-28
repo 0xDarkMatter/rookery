@@ -38,6 +38,7 @@ from pathlib import Path
 
 import structlog
 
+from rookery.adapters.base import VerdictAdapter, VerdictResult
 from rookery.orchestrator.backend import Job, OrchestratorBackend, WorkerHandle
 from rookery.platform import claude_lb
 from rookery.platform.headless_spawn import spawn_headless_claude
@@ -242,11 +243,17 @@ class WorkerBackend(OrchestratorBackend):
         claude_profile: str | None = "mknv74",
         worktree_lifecycle: WorktreeLifecycle | None = None,
         profile_selector: ProfileSelector | None = None,
+        db_path: Path | None = None,
     ) -> None:
         self.repo_root = Path(repo_root)
         self.worktrees_root = Path(
             worktrees_root or self.repo_root.parent / "rookery-worktrees"
         )
+        # v0.3: db_path enables ROOKERY_DB env injection so workers can
+        # invoke ``rookery parcel done`` and write directly to the queue's DB.
+        # When None, env vars are not injected and workers fall back to the
+        # legacy marker-file protocol.
+        self.db_path = Path(db_path).resolve() if db_path is not None else None
         # G1: If a WorktreeLifecycle is injected, it takes responsibility for
         # creating/querying worktrees.  Otherwise the legacy ensure_worktree
         # helper is used so existing deployments are unaffected.
@@ -419,6 +426,18 @@ class WorkerBackend(OrchestratorBackend):
         except (RuntimeError, Exception) as exc:
             raise RuntimeError(f"spawn failed for {job.id}: {exc}") from exc
 
+        # v0.3: inject parcel-context env vars so the worker can invoke
+        # ``rookery parcel done`` / ``rookery parcel progress`` and write
+        # directly to the queue DB without needing to know the daemon's
+        # config or DB path. Done after worktree creation so ROOKERY_WORKTREE
+        # is known. Only injected when db_path was supplied to the
+        # WorkerBackend; absent db_path = legacy marker-file mode.
+        if self.db_path is not None:
+            env["ROOKERY_DB"] = str(self.db_path)
+            env["ROOKERY_PARCEL_ID"] = job.id
+            env["ROOKERY_PARCEL_ATTEMPT"] = str(job.attempts)
+            env["ROOKERY_WORKTREE"] = str(Path(worktree).resolve())
+
         log.info(
             "orchestrator.worker_backend.spawn",
             job_id=job.id,
@@ -455,41 +474,33 @@ class WorkerBackend(OrchestratorBackend):
             return False
         return await asyncio.to_thread(_pid_alive, pid)
 
-    async def harvest(self, handle: WorkerHandle) -> dict[str, object] | None:
-        # Preferred convention: parcels/done/<job_id>.md (committed-friendly,
-        # not affected by root .gitignore). Also accepted: the MODULE-NN short
-        # form (e.g. parcels/done/BENCH-04.md for job BENCH-04-batch-scheduler)
-        # because parcel prompts in MODULE-NN-slug naming don't always specify
-        # which form to use, and historical worktrees ship a mix of both.
-        # Legacy fallbacks: PARCEL_DONE-<id>.md at worktree root (per-parcel
-        # unique), then plain PARCEL_DONE.md.
-        short_id = "-".join(handle.job_id.split("-")[:2])
-        candidates = [
-            handle.worktree / "parcels" / "done" / f"{handle.job_id}.md",
-            handle.worktree / "parcels" / "done" / f"{short_id}.md",
-            handle.worktree / f"PARCEL_DONE-{handle.job_id}.md",
-            handle.worktree / f"PARCEL_DONE-{short_id}.md",
-            handle.worktree / "PARCEL_DONE.md",
-        ]
-        done_file = next((p for p in candidates if p.exists()), None)
-        if done_file is None:
+    async def harvest(
+        self,
+        handle: WorkerHandle,
+        adapter: VerdictAdapter,
+    ) -> VerdictResult | None:
+        """Delegate verdict detection to *adapter*.
+
+        v0.3: the backend no longer parses marker files itself — that job
+        moved to the adapter system.  This method just calls the adapter
+        and enriches the returned :class:`VerdictResult` with the worker's
+        stdout tail (last 200 lines) for daemon-side diagnostics.
+
+        Returns:
+            ``VerdictResult`` if the adapter detected a verdict, ``None``
+            if the worker is still running.
+        """
+        result = adapter.detect(handle.worktree, handle.job_id)
+        if result is None:
             return None
-        try:
-            body = done_file.read_text(encoding="utf-8")
-        except OSError as exc:
-            log.warning(
-                "orchestrator.worker_backend.harvest_read_failed",
-                job_id=handle.job_id,
-                done_file=str(done_file),
-                err=str(exc),
-            )
-            return None
-        tail = _read_tail(handle.log_path, n=200) if handle.log_path.exists() else ""
-        return {
-            "status": "done",
-            "parcel_done_md": body,
-            "stdout_tail": tail,
-        }
+        # Stash the stdout tail in detail for diagnostics.  This is opaque
+        # to the verdict transition itself; failed-job logs surface it via
+        # ``rookery status --json``.
+        if handle.log_path.exists():
+            tail = _read_tail(handle.log_path, n=200)
+            if tail:
+                result.detail["stdout_tail"] = tail
+        return result
 
     async def terminate(self, handle: WorkerHandle) -> None:
         pid = handle.pid

@@ -495,3 +495,231 @@ class TestVerdictResult:
     def test_unknown_verdict_allowed(self) -> None:
         r = VerdictResult(verdict="UNKNOWN")
         assert r.verdict == "UNKNOWN"
+
+
+# ---------------------------------------------------------------------------
+# v0.3 — DbResultAdapter + ChainedAdapter
+# ---------------------------------------------------------------------------
+
+
+class TestDbResultAdapter:
+    """The v0.3 default — reads from parcel_results table."""
+
+    @pytest.fixture
+    def db_with_result(self, tmp_path: Path):
+        from rookery.orchestrator.orchestrator import Orchestrator
+
+        db_path = tmp_path / "rookery.db"
+        orch = Orchestrator(db_path, lease_ttl_s=60)
+        orch.enqueue("p1", "parcels/p1.md")
+        orch.write_parcel_result(
+            "p1",
+            attempt=1,
+            verdict="PASS",
+            summary="all green",
+            reported_via="cli",
+            tokens_in=12500,
+            tokens_out=3200,
+            duration_s=187.0,
+            tests_passed=42,
+        )
+        orch.close()
+        return db_path
+
+    def test_detects_existing_row(self, db_with_result: Path, tmp_path: Path) -> None:
+        from rookery.adapters.db import DbResultAdapter
+
+        adapter = DbResultAdapter(db_with_result)
+        result = adapter.detect(tmp_path, "p1")
+        assert result is not None
+        assert result.verdict == "PASS"
+        assert result.summary == "all green"
+        assert result.tokens_in == 12500
+        assert result.tokens_out == 3200
+        assert result.duration_s == pytest.approx(187.0)
+        assert result.tests_passed == 42
+        assert result.detail["reported_via"] == "cli"
+
+    def test_returns_none_for_missing_row(
+        self, db_with_result: Path, tmp_path: Path
+    ) -> None:
+        from rookery.adapters.db import DbResultAdapter
+
+        adapter = DbResultAdapter(db_with_result)
+        assert adapter.detect(tmp_path, "no-such-parcel") is None
+
+    def test_returns_none_for_missing_db(self, tmp_path: Path) -> None:
+        """Adapter must not crash if the DB hasn't been created yet."""
+        from rookery.adapters.db import DbResultAdapter
+
+        adapter = DbResultAdapter(tmp_path / "missing.db")
+        assert adapter.detect(tmp_path, "anything") is None
+
+    def test_latest_attempt_wins(self, tmp_path: Path) -> None:
+        """Multiple attempts → latest one is returned."""
+        from rookery.adapters.db import DbResultAdapter
+        from rookery.orchestrator.orchestrator import Orchestrator
+
+        db_path = tmp_path / "rookery.db"
+        orch = Orchestrator(db_path, lease_ttl_s=60)
+        orch.enqueue("p1", "parcels/p1.md")
+        orch.write_parcel_result(
+            "p1", attempt=1, verdict="BLOCK", summary="first",
+            reported_via="cli",
+        )
+        orch.write_parcel_result(
+            "p1", attempt=2, verdict="PASS", summary="second",
+            reported_via="cli",
+        )
+        orch.close()
+
+        adapter = DbResultAdapter(db_path)
+        result = adapter.detect(tmp_path, "p1")
+        assert result is not None
+        assert result.verdict == "PASS"
+        assert result.summary == "second"
+
+
+class TestChainedAdapter:
+    """ChainedAdapter returns the first non-None from its sub-adapters."""
+
+    def test_first_adapter_wins_when_it_returns(self, tmp_path: Path) -> None:
+        from rookery.adapters.chain import ChainedAdapter
+
+        wt = tmp_path / "wt"
+        wt.mkdir()
+        # First adapter always returns; second never gets called
+        first = MagicMock()
+        first.detect.return_value = VerdictResult(verdict="PASS", summary="first")
+        second = MagicMock()
+
+        chain = ChainedAdapter([first, second])
+        result = chain.detect(wt, "p1")
+        assert result is not None
+        assert result.summary == "first"
+        second.detect.assert_not_called()
+
+    def test_falls_through_when_first_returns_none(self, tmp_path: Path) -> None:
+        from rookery.adapters.chain import ChainedAdapter
+
+        wt = tmp_path / "wt"
+        wt.mkdir()
+        first = MagicMock()
+        first.detect.return_value = None
+        second = MagicMock()
+        second.detect.return_value = VerdictResult(verdict="BLOCK", summary="second")
+
+        chain = ChainedAdapter([first, second])
+        result = chain.detect(wt, "p1")
+        assert result is not None
+        assert result.summary == "second"
+        first.detect.assert_called_once()
+        second.detect.assert_called_once()
+
+    def test_returns_none_when_all_return_none(self, tmp_path: Path) -> None:
+        from rookery.adapters.chain import ChainedAdapter
+
+        first = MagicMock()
+        first.detect.return_value = None
+        second = MagicMock()
+        second.detect.return_value = None
+
+        chain = ChainedAdapter([first, second])
+        assert chain.detect(tmp_path, "p1") is None
+
+    def test_empty_chain_returns_none(self, tmp_path: Path) -> None:
+        from rookery.adapters.chain import ChainedAdapter
+
+        chain = ChainedAdapter([])
+        assert chain.detect(tmp_path, "p1") is None
+
+    def test_db_then_marker_file_default_chain(self, tmp_path: Path) -> None:
+        """The canonical default chain: DB hit short-circuits before marker
+        file is consulted."""
+        from rookery.adapters.chain import ChainedAdapter
+        from rookery.adapters.db import DbResultAdapter
+        from rookery.adapters.marker_file import MarkerFileAdapter
+        from rookery.orchestrator.orchestrator import Orchestrator
+
+        db_path = tmp_path / "rookery.db"
+        wt = tmp_path / "wt"
+        wt.mkdir()
+
+        orch = Orchestrator(db_path, lease_ttl_s=60)
+        orch.enqueue("p1", "parcels/p1.md")
+        orch.write_parcel_result(
+            "p1", attempt=1, verdict="PASS", summary="from db",
+            reported_via="cli",
+        )
+        orch.close()
+
+        # Also write a marker file with a DIFFERENT verdict — the chain
+        # must prefer the DB row.
+        (wt / "PARCEL_DONE-p1.md").write_text(
+            "Verdict: BLOCK\n\n## Summary\nfrom file\n", encoding="utf-8"
+        )
+
+        chain = ChainedAdapter([DbResultAdapter(db_path), MarkerFileAdapter()])
+        result = chain.detect(wt, "p1")
+        assert result is not None
+        assert result.verdict == "PASS"
+        assert result.summary == "from db"
+
+    def test_legacy_fallback_marker_file_used(self, tmp_path: Path) -> None:
+        """When DB has no row, chain falls through to the marker-file adapter."""
+        from rookery.adapters.chain import ChainedAdapter
+        from rookery.adapters.db import DbResultAdapter
+        from rookery.adapters.marker_file import MarkerFileAdapter
+        from rookery.orchestrator.orchestrator import Orchestrator
+
+        db_path = tmp_path / "rookery.db"
+        wt = tmp_path / "wt"
+        wt.mkdir()
+
+        # DB exists but has no parcel_results row for p1
+        orch = Orchestrator(db_path, lease_ttl_s=60)
+        orch.enqueue("p1", "parcels/p1.md")
+        orch.close()
+
+        (wt / "PARCEL_DONE-p1.md").write_text(
+            "Verdict: PASS\n\n## Summary\nfrom file\n", encoding="utf-8"
+        )
+
+        chain = ChainedAdapter([DbResultAdapter(db_path), MarkerFileAdapter()])
+        result = chain.detect(wt, "p1")
+        assert result is not None
+        assert result.verdict == "PASS"
+        assert result.summary == "from file"
+
+
+class TestRegistryV3Additions:
+    """Registry now resolves ``db`` and ``chain`` with the right context."""
+
+    def test_db_adapter_via_registry(self, tmp_path: Path) -> None:
+        from rookery.adapters.db import DbResultAdapter
+
+        db_path = tmp_path / "rookery.db"
+        adapter = get_verdict_adapter("db", db_path=db_path)
+        assert isinstance(adapter, DbResultAdapter)
+
+    def test_chain_adapter_via_registry(self, tmp_path: Path) -> None:
+        from rookery.adapters.chain import ChainedAdapter
+
+        db_path = tmp_path / "rookery.db"
+        adapter = get_verdict_adapter("chain", db_path=db_path)
+        assert isinstance(adapter, ChainedAdapter)
+        # Default chain has 2 sub-adapters (DB → marker file)
+        assert len(adapter.adapters) == 2
+
+    def test_db_requires_db_path(self) -> None:
+        with pytest.raises(ValueError, match="requires db_path"):
+            get_verdict_adapter("db")
+
+    def test_chain_requires_db_path(self) -> None:
+        with pytest.raises(ValueError, match="requires db_path"):
+            get_verdict_adapter("chain")
+
+    def test_marker_file_ignores_db_path(self, tmp_path: Path) -> None:
+        """db_path kwarg is harmless for adapters that don't need it."""
+        adapter = get_verdict_adapter("marker-file", db_path=tmp_path)
+        assert isinstance(adapter, MarkerFileAdapter)

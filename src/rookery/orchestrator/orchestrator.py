@@ -1136,6 +1136,181 @@ class Orchestrator:
             )
         return events
 
+    # --- parcel results + events (v0.3) --------------------------------------
+    #
+    # The DB-direct reporting protocol: workers invoke ``rookery parcel done``
+    # which writes a ``parcel_results`` row, and ``rookery parcel progress``
+    # which appends a ``parcel_events`` row.  The daemon's harvest path queries
+    # ``parcel_results`` instead of polling for marker files.
+    #
+    # Both methods are deliberately small and side-effect free beyond the SQL
+    # write — the daemon orchestrates state transitions, not these helpers.
+
+    def write_parcel_result(
+        self,
+        job_id: str,
+        attempt: int,
+        verdict: str,
+        summary: str,
+        *,
+        reported_via: str,
+        detail_md: str | None = None,
+        tokens_in: int | None = None,
+        tokens_out: int | None = None,
+        duration_s: float | None = None,
+        tests_passed: int | None = None,
+        tests_failed: int | None = None,
+        files_changed: int | None = None,
+    ) -> None:
+        """INSERT a structured verdict row for *job_id* at *attempt*.
+
+        Uses ``INSERT OR REPLACE`` so a re-invocation within the same attempt
+        (e.g. worker retry inside its subprocess) overwrites the prior row
+        rather than raising on the UNIQUE(job_id, attempt) constraint.
+
+        Validation: ``verdict`` must be one of the four allowed tokens;
+        ``reported_via`` one of the four sources.  The DB-level CHECK
+        constraints are the ultimate enforcement, but we pre-validate to
+        produce a friendlier error message than ``IntegrityError``.
+        """
+
+        if verdict not in _VALID_VERDICTS:
+            raise ValueError(
+                f"verdict must be one of {sorted(_VALID_VERDICTS)}, got {verdict!r}"
+            )
+        if reported_via not in {"cli", "marker_file", "exit_code", "json_result"}:
+            raise ValueError(
+                f"reported_via must be one of "
+                f"['cli','marker_file','exit_code','json_result'], got {reported_via!r}"
+            )
+        with self._conn_lock:
+            exists = self._conn.execute(
+                "SELECT 1 FROM jobs WHERE id = ?", (job_id,)
+            ).fetchone()
+            if exists is None:
+                raise JobNotFound(job_id)
+            self._conn.execute(
+                """
+                INSERT OR REPLACE INTO parcel_results
+                    (job_id, attempt, verdict, summary, detail_md,
+                     tokens_in, tokens_out, duration_s,
+                     tests_passed, tests_failed, files_changed,
+                     reported_via)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    job_id,
+                    attempt,
+                    verdict,
+                    summary,
+                    detail_md,
+                    tokens_in,
+                    tokens_out,
+                    duration_s,
+                    tests_passed,
+                    tests_failed,
+                    files_changed,
+                    reported_via,
+                ),
+            )
+
+    def read_parcel_result(
+        self,
+        job_id: str,
+        attempt: int | None = None,
+    ) -> dict[str, Any] | None:
+        """Return the parcel_results row for *job_id* and *attempt* (or latest).
+
+        When *attempt* is ``None``, returns the row with the highest attempt
+        number — useful for the daemon's harvest path which knows the job_id
+        but doesn't always carry the attempt counter.
+        """
+
+        with self._conn_lock:
+            if attempt is not None:
+                row = self._conn.execute(
+                    "SELECT * FROM parcel_results WHERE job_id = ? AND attempt = ?",
+                    (job_id, attempt),
+                ).fetchone()
+            else:
+                row = self._conn.execute(
+                    "SELECT * FROM parcel_results WHERE job_id = ? "
+                    "ORDER BY attempt DESC LIMIT 1",
+                    (job_id,),
+                ).fetchone()
+        if row is None:
+            return None
+        return dict(row)
+
+    def append_parcel_event(
+        self,
+        job_id: str,
+        attempt: int,
+        event_type: str,
+        *,
+        label: str | None = None,
+        detail: str | None = None,
+        payload: dict[str, Any] | None = None,
+    ) -> int:
+        """Append a streaming progress event; returns the new row id.
+
+        Workers call this via ``rookery parcel progress``.  The daemon does
+        not gate state transitions on event presence — events are purely for
+        observability (``rookery logs``, future ``rookery watch`` TUI).
+        """
+
+        with self._conn_lock:
+            exists = self._conn.execute(
+                "SELECT 1 FROM jobs WHERE id = ?", (job_id,)
+            ).fetchone()
+            if exists is None:
+                raise JobNotFound(job_id)
+            cursor = self._conn.execute(
+                """
+                INSERT INTO parcel_events
+                    (job_id, attempt, event_type, label, detail, payload_json)
+                VALUES (?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    job_id,
+                    attempt,
+                    event_type,
+                    label,
+                    detail,
+                    json.dumps(payload) if payload else None,
+                ),
+            )
+            return cursor.lastrowid or 0
+
+    def read_parcel_events(
+        self,
+        job_id: str,
+        *,
+        attempt: int | None = None,
+        since_id: int = 0,
+    ) -> list[dict[str, Any]]:
+        """Return events for *job_id*, oldest first, optionally scoped to attempt.
+
+        *since_id* enables incremental polling (``rookery watch`` keeps the
+        last-seen id and asks for events strictly newer).  Pass ``0`` to read
+        everything.
+        """
+
+        with self._conn_lock:
+            if attempt is not None:
+                rows = self._conn.execute(
+                    "SELECT * FROM parcel_events WHERE job_id = ? AND attempt = ? "
+                    "AND id > ? ORDER BY id ASC",
+                    (job_id, attempt, since_id),
+                ).fetchall()
+            else:
+                rows = self._conn.execute(
+                    "SELECT * FROM parcel_events WHERE job_id = ? AND id > ? "
+                    "ORDER BY id ASC",
+                    (job_id, since_id),
+                ).fetchall()
+        return [dict(r) for r in rows]
+
     def reclaim_expired(self) -> list[str]:
         """Move claimed/running jobs whose lease has expired back to pending.
 

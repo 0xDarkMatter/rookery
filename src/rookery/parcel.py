@@ -50,7 +50,7 @@ priority: 0
 deps: []
 max_attempts: 3
 verification_enabled: true
-verdict_adapter: marker-file
+verdict_adapter: chain
 notes: ""
 ---
 
@@ -63,19 +63,31 @@ You are working in a fresh git worktree. <describe the task here>
 - <criterion 1>
 - <criterion 2>
 
-## Verdict
+## Verdict (required — copy-paste at the end)
 
-When you finish, write a file at the worktree root named
-`PARCEL_DONE-{id}.md` with this shape:
+When you finish, run from inside the worktree:
 
-    # PARCEL_DONE: {id}
+    rookery parcel done --verdict PASS --summary "<one-line headline>"
 
-    Verdict: PASS
+Replace `PASS` with `PASS_WITH_WARNINGS` / `BLOCK` / `UNKNOWN` as
+appropriate.  The `--summary` is what shows up in `rookery list` and is
+used as the auto-commit subject if `auto_commit_on_pass: true`.
 
-    ## Summary
-    <one paragraph>
+Optional metadata (any subset):
 
-If you cannot complete the work, set `Verdict: BLOCK` and explain why.
+    rookery parcel done --verdict PASS --summary "..." \\
+      --tokens-in 12500 --tokens-out 3200 --duration-s 187 \\
+      --tests-passed 42 --tests-failed 0 --files-changed 3
+
+For longer narrative:
+
+    rookery parcel done --verdict PASS --summary "..." --detail-file detail.md
+
+You can also emit progress events along the way for visibility in
+`rookery logs --events`:
+
+    rookery parcel progress "Implemented OAuth"
+    rookery parcel progress "Wired up middleware" --detail "see src/auth/mw.py"
 """
     target.parent.mkdir(parents=True, exist_ok=True)
     target.write_text(template, encoding="utf-8")
@@ -204,13 +216,17 @@ def parcel_validate(path: Path) -> ValidationResult:
             "parcel body is empty — `claude -p` would receive no prompt"
         )
 
-    # 7. PARCEL_DONE reference (warn only)
+    # 7. Verdict-reporting hint (warn only).  Workers should either invoke
+    # ``rookery parcel done`` (v0.3 default) or write the legacy
+    # ``PARCEL_DONE-<id>.md`` marker (still supported via fallback adapter).
     if "id" in fm and body.strip():
-        done_marker = f"PARCEL_DONE-{fm['id']}.md"
-        if done_marker not in body:
+        legacy_marker = f"PARCEL_DONE-{fm['id']}.md"
+        has_helper_hint = "rookery parcel done" in body
+        has_legacy_hint = legacy_marker in body
+        if not (has_helper_hint or has_legacy_hint):
             warnings.append(
-                f"body does not reference {done_marker!r} — workers may not know "
-                "where to write their verdict file"
+                "body references neither 'rookery parcel done' nor "
+                f"{legacy_marker!r} — workers may not know how to report their verdict"
             )
 
     ok = len(errors) == 0

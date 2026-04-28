@@ -93,10 +93,29 @@ priority: 0
 deps: []
 max_attempts: 3
 verification_enabled: true
-verdict_adapter: marker-file
+verdict_adapter: chain    # v0.3: DB-direct first, marker-file fallback
 auto_land: false
 ---
 ```
+
+The body should end with the verdict-reporting protocol. The default template tells the worker:
+
+```markdown
+## Verdict (required — copy-paste at the end)
+
+When you finish, run from inside the worktree:
+
+    rookery parcel done --verdict PASS --summary "<one-line>"
+```
+
+The worker can also emit progress events along the way:
+
+```bash
+rookery parcel progress "Implemented OAuth"
+rookery parcel progress "Wired up middleware" --detail "see src/auth/mw.py"
+```
+
+These appear in `rookery logs <id> --events` for live observability.
 
 For the simplest possible parcel, copy `examples/01-hello-world/parcel.md` over the scaffold.
 
@@ -158,10 +177,14 @@ When the parcel finishes:
 
 ```bash
 rookery status hello-world
-# {"id": "hello-world", "status": "done", "verdict": "PASS", ...}
+# {"id": "hello-world", "status": "done", "result": {"verdict": "PASS", "summary": "...", ...}}
+
+rookery logs hello-world          # tail the parcel's stdout log
+rookery diff hello-world          # show git diff vs main inside the worktree
+rookery diff hello-world --stat   # just file change counts
 ```
 
-If the worker emitted `Verdict: PASS` and left unstaged changes in the worktree, the daemon **automatically commits** them with a `feat(<parcel-id>): <summary>` message before flipping the job to `done`. This guarantees the parcel branch HEAD advances so `auto_land` (or a manual merge) has something to fast-forward. Disable per-deployment with `auto_commit_on_pass: false` in `rookery.yaml`.
+If the worker reported `--verdict PASS` and left unstaged changes in the worktree, the daemon **automatically commits** them with a `feat(<parcel-id>): <summary>` message before flipping the job to `done`. This guarantees the parcel branch HEAD advances so `auto_land` (or a manual merge) has something to fast-forward. Disable per-deployment with `auto_commit_on_pass: false` in `rookery.yaml`.
 
 ## 7. Stop the daemon
 

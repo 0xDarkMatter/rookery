@@ -1,6 +1,6 @@
 [project]
 name = "rookery"
-version = "0.2.0"
+version = "0.3.0"
 description = "Persistent parcel-dispatch queue + async daemon for unattended parallel `claude -p` sessions in git worktrees."
 readme = "README.md"
 requires-python = ">=3.12"
